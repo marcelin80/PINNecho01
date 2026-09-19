@@ -19,16 +19,28 @@ X_INDEX = {"x": 0, "y": 1, "t": 2}
 def grad(scalar: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
     """Gradient of a scalar field ``scalar`` (shape ``(N, 1)``) w.r.t. ``X``.
 
-    Returns a tensor of shape ``(N, 3)`` holding ``[d/dx, d/dy, d/dt]``.
+    Returns a tensor of shape ``(N, X.shape[1])`` holding ``[d/dx, d/dy, (d/dz,)
+    d/dt]``.
+
+    Robustness: if ``scalar`` is structurally independent of ``X`` (e.g. a
+    constant or a linear field whose higher derivatives vanish) autograd would
+    otherwise raise "does not require grad" / return ``None``. Since the
+    derivative is then mathematically zero, we return zeros. ``allow_unused`` and
+    ``materialize_grads`` cover partially-disconnected inputs. This matters for
+    analytical unit tests; trained networks are nonlinear and rarely hit it.
     """
     if scalar.dim() == 1:
         scalar = scalar.unsqueeze(-1)
+    if not scalar.requires_grad or scalar.grad_fn is None:
+        return torch.zeros(scalar.shape[0], X.shape[1], dtype=X.dtype, device=X.device)
     (g,) = torch.autograd.grad(
         scalar,
         X,
         grad_outputs=torch.ones_like(scalar),
         create_graph=True,
         retain_graph=True,
+        allow_unused=True,
+        materialize_grads=True,
     )
     return g
 

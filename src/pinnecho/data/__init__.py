@@ -1,6 +1,8 @@
 from .synthetic_lv import SyntheticLVFSI
 from .doppler import DopplerSampler, project_velocity
 from .dataset import ReconstructionDataset, build_dataset
+from .load_ibfe_output import IBFEFrames, load_ibfe_output
+from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
 
 __all__ = [
     "SyntheticLVFSI",
@@ -8,4 +10,8 @@ __all__ = [
     "project_velocity",
     "ReconstructionDataset",
     "build_dataset",
+    "IBFEFrames",
+    "load_ibfe_output",
+    "DopplerMeasurements",
+    "synthesize_doppler",
 ]

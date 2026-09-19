@@ -146,27 +146,39 @@ the forcing `f`:
 ```
 PINNecho01/
 ├── configs/                     # experiment configs (YAML)
-│   ├── baseline.yaml            #   backbone A
-│   ├── fsi_informed.yaml        #   backbone B
+│   ├── default.yaml             #   spec-aligned config: every knob documented
+│   ├── baseline.yaml            #   backbone A (Stage-1 demo pipeline)
+│   ├── fsi_informed.yaml        #   backbone B (Stage-1 demo pipeline)
 │   └── smoke.yaml               #   tiny/fast config for CI & demos
 ├── src/pinnecho/
 │   ├── config.py                # dataclass config + YAML (de)serialisation
 │   ├── cli.py                   # generate / train / evaluate / compare entry points
 │   ├── pipeline.py              # reusable high-level orchestration
+│   ├── evaluate.py              # spec metrics: velocity/pressure/vorticity/Q/WSS/
+│   │                            #   residence-time + stagnation + spline baseline
 │   ├── data/
 │   │   ├── synthetic_lv.py      # synthetic IBAMR/IBFE-like LV FSI ground truth
 │   │   ├── doppler.py           # single-component sparse Doppler sampling
-│   │   └── dataset.py           # measurement + collocation + wall point sets
+│   │   ├── dataset.py           # measurement + collocation + wall point sets
+│   │   ├── load_ibfe_output.py  # [TODO STUB] real IBFE loader (documented shapes)
+│   │   └── synthesize_doppler.py# [TODO STUB] Doppler synthesis (documented shapes)
 │   ├── models/
-│   │   ├── mlp.py               # Fourier-feature MLP
-│   │   └── pinn.py              # (x,y,t) -> (u,v,p), with non-dimensionalisation
+│   │   ├── mlp.py               # Fourier-feature MLP (Stage-1 demo)
+│   │   ├── pinn.py              # (x,y,t) -> (u,v,p), with non-dimensionalisation
+│   │   └── mlp_pinn.py          # spec network: multi-scale Fourier + heads u,v,[w],p,c
 │   ├── physics/
 │   │   ├── operators.py         # autograd grad / div / curl / laplacian / D/Dt
-│   │   ├── navier_stokes.py     # incompressible NS residual (with forcing hook)
+│   │   ├── ns_residual.py       # incompressible NS residual (2D/3D, forcing hook)
+│   │   ├── scalar_transport.py  # residence-time passive-scalar residual
+│   │   ├── navier_stokes.py     # back-compat alias of ns_residual
 │   │   └── boundary.py          # no-slip wall BC residual
+│   ├── bc/
+│   │   └── boundary_conditions.py  # Model A kinematic (impl); Model B (stubs)
 │   ├── train/
-│   │   ├── losses.py            # data + continuity + momentum + wall losses
-│   │   └── trainer.py           # Adam training loop, per-backbone forcing
+│   │   ├── losses.py            # Stage-1 demo losses
+│   │   ├── trainer.py           # Stage-1 demo Adam/L-BFGS loop
+│   │   ├── composite_loss.py    # spec 6-term loss + PDE-weight annealing
+│   │   └── train.py             # spec training entry (Model A loop; Model B gated)
 │   ├── eval/
 │   │   ├── metrics.py           # velocity / pressure / vorticity / WSS errors
 │   │   ├── residence_time.py    # Lagrangian blood residence time
@@ -174,9 +186,34 @@ PINNecho01/
 │   └── utils/                   # seeding, logging
 ├── scripts/                     # thin CLI wrappers (run without install)
 ├── tests/                       # pytest suite (fast, small-scale)
+│   ├── test_ns_residual_taylor_green.py  # NS residual ~0 on exact solutions
+│   └── test_scalar_transport.py          # scalar residual ~0 on exact solutions
 ├── pyproject.toml
 └── requirements.txt
 ```
+
+### Spec-aligned build status
+
+The modules above marked "spec" implement the detailed physics/architecture
+specification incrementally. Current status:
+
+| Component | File | Status |
+|---|---|---|
+| Incompressible NS residual (2D & 3D) | `physics/ns_residual.py` | **Implemented** + unit-tested (Taylor–Green, Poiseuille) |
+| Residence-time scalar transport | `physics/scalar_transport.py` | **Implemented** + unit-tested (advection/diffusion/source) |
+| Multi-scale Fourier network (`u,v,[w],p,c`) | `models/mlp_pinn.py` | **Implemented** (σ∈{1,10,100}, tanh/sine, 2D/3D) |
+| Composite loss (data/pde/scalar/bc/ic/periodic) + annealing | `train/composite_loss.py` | **Implemented** (data loss is beam-component only) |
+| Model A kinematic BC + valve/inflow | `bc/boundary_conditions.py` | **Implemented** |
+| Validation metrics + spline baseline | `evaluate.py` | **Implemented** (primitives); end-to-end driver scaffolded |
+| Training entry | `train/train.py` | Loop implemented; toy-case wiring gated on confirmation |
+| IBFE loader / Doppler synthesis | `data/load_ibfe_output.py`, `data/synthesize_doppler.py` | **TODO stubs** with documented tensor shapes |
+| Model B (FSI wall velocity / traction continuity) | `bc/boundary_conditions.py` | **Not started** (deliberately, until Model A validates) |
+
+> **Staging.** Per the plan, Model B's traction-matching BC is not begun until
+> Model A trains successfully end-to-end on the toy 2D case, and each stage is
+> confirmed before the next. The Model B BC helpers exist as clearly-marked
+> `NotImplementedError` stubs so the interface is fixed but the ablation stays
+> honest.
 
 ---
 

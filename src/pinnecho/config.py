@@ -63,13 +63,23 @@ class DopplerConfig:
     relative std ``noise_level`` is added.
     """
 
+    # Primary virtual transducer (single acoustic window).
     transducer: tuple[float, float] = (0.0, -0.075)
+    # Optional additional acoustic windows. Real echocardiography often combines
+    # views (e.g. apical + parasternal); with a single window the cross-beam
+    # velocity component is poorly observable, so extra windows at different
+    # angles make the full 2D velocity recoverable. Each measurement remains
+    # single-component (projected onto its own beam). Empty => single window.
+    transducers: tuple = ()
     n_points_per_frame: int = 300
     n_frames: int = 12
     t_start_frac: float = 0.05
     t_end_frac: float = 0.55
     noise_level: float = 0.05
     seed: int = 0
+
+    def all_windows(self) -> tuple:
+        return tuple(self.transducers) if self.transducers else (self.transducer,)
 
 
 @dataclass
@@ -89,8 +99,11 @@ class ModelConfig:
     hidden_width: int = 128
     hidden_depth: int = 5
     activation: str = "tanh"
-    fourier_features: int = 32
-    fourier_scale: float = 5.0
+    # Plain tanh MLP by default (fourier_features = 0): smooth derivatives are
+    # essential for recovering vorticity / WSS. Random Fourier features are
+    # available but disabled by default -- see models/mlp.py and the README.
+    fourier_features: int = 0
+    fourier_scale: float = 1.0
     output_pressure: bool = True
 
 
@@ -111,21 +124,39 @@ class PhysicsConfig:
 
 @dataclass
 class LossWeights:
-    data: float = 1.0
-    continuity: float = 1.0
-    momentum: float = 1.0
+    # All four terms are dimensionless/relative and O(1), so weights are directly
+    # comparable. Data + wall are emphasised so both backbones genuinely fit the
+    # (sparse, single-component) measurements and the moving-wall no-slip BC; the
+    # backbones are then separated by how well the momentum residual is satisfied.
+    data: float = 10.0
+    continuity: float = 20.0
+    momentum: float = 5.0
     wall: float = 10.0
 
 
 @dataclass
 class TrainConfig:
     iterations: int = 4000
-    lr: float = 1.0e-3
+    lr: float = 2.0e-3
     lr_decay: float = 0.5
     lr_decay_every: int = 2000
     batch_interior: int = 2048
     batch_wall: int = 512
-    log_every: int = 200
+    log_every: int = 500
+    # Fraction of training over which the *physics* (continuity + momentum)
+    # weights are ramped linearly from 0 to their full values. At random
+    # initialisation both physics residuals are orders of magnitude larger than
+    # the (relative) data term AND are both minimised by the trivial u=0 field
+    # (which is divergence-free and, with p=const, has zero momentum residual
+    # for the baseline). Without a ramp the optimiser collapses to u=0 and never
+    # fits the sparse data. Warming up on data + wall first establishes a
+    # non-trivial velocity field that fits the Doppler measurements; the physics
+    # then refines it (and is where the baseline vs FSI difference emerges).
+    physics_warmup_frac: float = 0.3
+    # Optional full-batch L-BFGS polishing after Adam. L-BFGS is very effective
+    # at driving PINN residuals down the last 1-2 orders of magnitude once Adam
+    # has found a good basin; 0 disables it.
+    lbfgs_iters: int = 0
     weights: LossWeights = field(default_factory=LossWeights)
 
 

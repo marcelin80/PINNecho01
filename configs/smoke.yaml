@@ -16,9 +16,10 @@ flow:
   pressure_amplitude: 400.0
 
 doppler:
-  n_points_per_frame: 80
+  transducers: [[-0.055, -0.045], [0.055, -0.045]]
+  n_points_per_frame: 60
   n_frames: 6
-  noise_level: 0.05
+  noise_level: 0.02
 
 collocation:
   n_interior: 800
@@ -28,16 +29,18 @@ collocation:
 model:
   hidden_width: 48
   hidden_depth: 3
-  fourier_features: 16
-  fourier_scale: 5.0
+  fourier_features: 0
+  output_pressure: true
 
 physics:
   backbone: baseline
 
 train:
-  iterations: 300
+  iterations: 400
   lr: 0.002
-  lr_decay_every: 200
+  physics_warmup_frac: 0.3
+  lbfgs_iters: 0
+  lr_decay_every: 250
   batch_interior: 512
   batch_wall: 128
-  log_every: 100
+  log_every: 200

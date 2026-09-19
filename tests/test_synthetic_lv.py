@@ -31,7 +31,7 @@ def test_exact_no_slip_at_wall():
     wall = lv.sample_wall(500, tvals, rng)
     Xw = wall["X"].clone().requires_grad_(True)
     uv = lv.velocity(Xw)
-    err = (uv - wall["wall_velocity"]).abs().max()
+    err = (uv - wall["wall_velocity"]).detach().abs().max()
     assert float(err) < 1e-9
 
 

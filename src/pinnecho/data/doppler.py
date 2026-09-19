@@ -29,33 +29,42 @@ class DopplerSampler:
     def __init__(self, cfg: DopplerConfig):
         self.cfg = cfg
 
-    def beam_directions(self, X: torch.Tensor) -> torch.Tensor:
-        """Unit vectors from the virtual transducer to each sample point."""
-        tx = torch.tensor(
-            [self.cfg.transducer[0], self.cfg.transducer[1]],
-            dtype=X.dtype,
-        )
+    def beam_directions(self, X: torch.Tensor, transducer=None) -> torch.Tensor:
+        """Unit vectors from a virtual transducer to each sample point."""
+        transducer = transducer if transducer is not None else self.cfg.transducer
+        tx = torch.tensor([transducer[0], transducer[1]], dtype=X.dtype)
         d = X[:, 0:2] - tx
         d = d / d.norm(dim=1, keepdim=True).clamp_min(1e-12)
         return d
 
     def sample(self, lv: SyntheticLVFSI, rng: np.random.Generator) -> Dict[str, torch.Tensor]:
-        """Return a dictionary describing the Doppler acquisition."""
+        """Return a dictionary describing the (possibly multi-window) acquisition.
+
+        For each acoustic window a fresh set of interior points is drawn per
+        frame and the velocity is projected onto that window's beam directions.
+        Measurements from all windows are concatenated.
+        """
         period = lv.flow.period
         t_frames = np.linspace(
             self.cfg.t_start_frac * period,
             self.cfg.t_end_frac * period,
             self.cfg.n_frames,
         )
-        coords = []
-        for t in t_frames:
-            coords.append(
-                lv.sample_interior(self.cfg.n_points_per_frame, np.array([t]), rng)
-            )
-        X = torch.cat(coords, dim=0)
+        windows = self.cfg.all_windows()
+        X_list, beam_list = [], []
+        for transducer in windows:
+            coords = []
+            for t in t_frames:
+                coords.append(
+                    lv.sample_interior(self.cfg.n_points_per_frame, np.array([t]), rng)
+                )
+            Xw = torch.cat(coords, dim=0)
+            X_list.append(Xw)
+            beam_list.append(self.beam_directions(Xw, transducer))
+        X = torch.cat(X_list, dim=0)
+        beam = torch.cat(beam_list, dim=0)
 
         fields = lv.all_fields(X)
-        beam = self.beam_directions(X)
         doppler_true = project_velocity(fields["u"], fields["v"], beam)
 
         # Additive Gaussian noise scaled by the RMS Doppler magnitude.

@@ -1,10 +1,15 @@
-"""Fourier-feature MLP building blocks.
+"""MLP building blocks, with an optional Fourier-feature embedding.
 
-PINNs with plain coordinate inputs suffer from spectral bias and struggle to
-represent the sharp intracavitary shear layers that dominate vorticity / WSS.
-A fixed random Fourier-feature embedding (Tancik et al. 2020) lifts the input
-into a higher-frequency basis and markedly improves gradient recovery, which is
-precisely the quantity this project cares about.
+A plain tanh MLP (``fourier_features = 0``) is the recommended default here:
+its outputs are smooth and, crucially, so are its *derivatives*, which matters
+because this project reports velocity-gradient quantities (vorticity, wall shear
+stress). Random Fourier features (Tancik et al. 2020) fix the spectral bias of
+plain MLPs and speed up fitting of high-frequency *values*, but at moderate/high
+feature scales they inject high-frequency wiggle that fits the velocity while
+badly corrupting its curl -- empirically, even a *fully supervised* fit with
+Fourier features (scale 2-5) recovered vorticity/WSS an order of magnitude worse
+than a plain tanh MLP. Fourier features are therefore kept available (with a
+small scale) but disabled by default. See the README for the diagnostic.
 """
 
 from typing import Callable

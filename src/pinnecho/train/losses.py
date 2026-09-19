@@ -30,9 +30,19 @@ class ResidualScales:
 
 
 def data_loss(model, meas_X, meas_beam, meas_doppler) -> torch.Tensor:
+    """Relative Doppler misfit.
+
+    Normalised by the mean-square Doppler signal so the term is O(1) and
+    dimensionless: ~1.0 for the trivial ``u = 0`` prediction and ~noise^2 for a
+    perfect fit. Without this normalisation the raw (m/s)^2 misfit is numerically
+    tiny and the optimiser prefers the trivial Navier-Stokes solution ``u = 0``
+    (which satisfies the baseline ``f = 0`` momentum + continuity exactly),
+    collapsing the reconstruction.
+    """
     u, v, _ = model(meas_X)
     proj = project_velocity(u, v, meas_beam)
-    return torch.mean((proj - meas_doppler) ** 2)
+    denom = torch.mean(meas_doppler ** 2).clamp_min(1e-12)
+    return torch.mean((proj - meas_doppler) ** 2) / denom
 
 
 def pde_loss(model, col_X, density, viscosity, res_scales: ResidualScales,
@@ -53,6 +63,13 @@ def pde_loss(model, col_X, density, viscosity, res_scales: ResidualScales,
 
 
 def wall_loss(model, wall_X, wall_velocity, velocity_scale: float) -> torch.Tensor:
+    """Relative no-slip misfit on the moving wall.
+
+    Normalised by the mean-square wall speed (with a floor tied to
+    ``velocity_scale``) so the term is dimensionless and does not vanish just
+    because the endocardial velocity is small.
+    """
     u, v, _ = model(wall_X)
-    res = wall_bc_residual(u, v, wall_velocity) / velocity_scale
-    return torch.mean(res ** 2)
+    res = wall_bc_residual(u, v, wall_velocity)
+    denom = torch.mean(wall_velocity ** 2).clamp_min((0.05 * velocity_scale) ** 2)
+    return torch.mean(res ** 2) / denom

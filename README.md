@@ -88,10 +88,18 @@ Key properties (asserted in `tests/test_synthetic_lv.py`):
 
 `data/doppler.py` emulates a color/PW-Doppler acquisition: for each sample point
 it records only the velocity component **along the beam** (the direction from a
-virtual transducer to the point), sparsely sampled per frame and corrupted with
-Gaussian noise. This one-component, sparse, noisy signal is the **only** velocity
-information the PINN sees — everything else (the other velocity component,
-pressure, gradients) must be inferred through the physics.
+virtual transducer to the point), sampled per frame and corrupted with Gaussian
+noise. This single-component, noisy signal is the **only** velocity information
+the PINN sees — everything else (the cross-beam velocity component, pressure,
+gradients) must be inferred through the physics.
+
+**Multiple acoustic windows.** With a single transducer the beams are nearly
+parallel across the cavity, so the cross-beam velocity component is poorly
+observable and is left almost entirely to the physics prior. Real
+echocardiography combines views (e.g. apical + parasternal); accordingly the
+acquisition supports several virtual transducers (`doppler.transducers`). Each
+measurement is still single-component, but combining windows at different angles
+substantially improves full-field recovery.
 
 ---
 
@@ -107,7 +115,29 @@ the forcing `f`:
   gradients — degrading pressure, vorticity and WSS.
 * **FSI-informed** enforces the *same* momentum equation the ground truth
   satisfies, so data + consistent physics + no-slip pin the solution to the
-  truth and gradient quantities are recovered far more faithfully.
+  truth. This most directly benefits the **pressure** field, which is governed
+  entirely by the momentum balance the forcing enters.
+
+---
+
+## Model & training
+
+* **Model.** A plain `tanh` MLP mapping non-dimensional `(x, y, t)` to
+  non-dimensional `(u, v, p)`. Smooth activations are used deliberately: the
+  headline quantities include velocity *derivatives* (vorticity, WSS), and a
+  plain tanh network has smooth, accurate derivatives. Random Fourier features
+  are available (`model.fourier_features > 0`) but **off by default** — see
+  [Stage-1 findings](#stage-1-findings).
+* **Losses.** Relative (dimensionless) Doppler-data misfit and no-slip wall
+  misfit, plus non-dimensionalised continuity and momentum residuals.
+* **Curriculum.** The physics (continuity + momentum) weights are ramped from 0
+  over the first `physics_warmup_frac` of training. At initialisation the PDE
+  residuals dwarf the data term and are *both minimised by the trivial `u = 0`
+  field*; without the ramp the optimiser collapses to `u = 0` and never fits the
+  data. Warming up on data + wall first establishes a non-trivial field.
+* **Optimisation.** Adam, followed by an optional full-batch **L-BFGS** polish
+  (`train.lbfgs_iters`) that drives the residuals down the last 1–2 orders of
+  magnitude.
 
 ---
 
@@ -249,6 +279,66 @@ NS-exact forcing), Doppler projection/noise, config round-trips, and an
 end-to-end training + evaluation smoke test.
 
 ---
+
+## Stage-1 findings
+
+Getting the reconstruction to work surfaced several results that are themselves
+informative (and are baked into the defaults):
+
+1. **Smooth activations are essential for gradient quantities.** In a
+   *fully-supervised* control (fit directly to the true `u, v, p`), a plain tanh
+   MLP recovered velocity, pressure, vorticity and WSS accurately, whereas the
+   same fit with random Fourier features (scale 2–5) matched the velocity values
+   but recovered **vorticity/WSS ~10× worse** — the features inject
+   high-frequency wiggle that fits values while corrupting derivatives. Fourier
+   features are therefore disabled by default.
+2. **Single-component acquisition is an observability bottleneck.** With one
+   acoustic window, even after driving all PDE/data residuals to ~1e-3 the
+   cross-beam velocity component is only partially recovered, which in turn caps
+   pressure/gradient accuracy. Multiple windows (and, ultimately, richer priors)
+   are needed for high-fidelity full-field recovery.
+3. **The FSI forcing helps most where the momentum balance dominates
+   (pressure).** Because the forcing enters only the momentum equation, its
+   cleanest, most consistent benefit is on pressure; its benefit to velocity
+   gradients is contingent on the velocity itself being well recovered.
+
+### Headline comparison (reference run)
+
+Trained on identical data (dual-window, 2% noise), plain-tanh network, Adam +
+L-BFGS, on CPU:
+
+| metric (relative L2, ↓) | baseline | fsi_informed | change |
+|---|---|---|---|
+| speed | 0.434 | 0.458 | −5.6% |
+| **vorticity** | 0.585 | **0.541** | **+7.5%** |
+| **wall shear stress** | 0.598 | **0.579** | **+3.2%** |
+| pressure | 1.030 | 3.087 | −199% |
+| residence time | 0.290 | 0.348 | −20% |
+
+Reproduce with:
+
+```bash
+python scripts/compare_backbones.py --config configs/baseline.yaml --out outputs/compare
+cat outputs/compare/comparison.txt
+```
+
+**Reading the result.** The FSI-informed backbone improves exactly the
+velocity-**gradient** quantities this project targets — vorticity (+7.5%) and
+WSS (+3.2%), the metrics CSF-PINN reported as weak — consistent with the
+hypothesis. However, in this Stage-1 regime the **pressure** recovery is *worse*
+for the FSI backbone: the (large) manufactured forcing is dominated by the true
+pressure gradient, so when the velocity is only partially recovered (the
+single-component observability bottleneck, ~0.45 speed error for both backbones)
+the momentum balance amplifies those velocity errors into the pressure estimate,
+whereas the baseline's `f = 0` momentum yields a bounded (but also wrong)
+pressure. Fully realising the pressure benefit therefore requires more accurate
+velocity recovery (richer acquisition / larger training budget / pressure
+gauge-fixing) — a Stage-2 objective. Treat this setup as a **validated framework
+and methodology** rather than a converged clinical result.
+
+Example artefacts from the reference run live in [`docs/results/`](docs/results):
+`metric_comparison.png`, `loss_curves.png`, and per-backbone field comparisons
+(`fields_baseline.png`, `fields_fsi_informed.png`).
 
 ## Roadmap beyond Stage 1
 

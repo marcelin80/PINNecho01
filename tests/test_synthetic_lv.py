@@ -49,9 +49,9 @@ def test_forcing_makes_navier_stokes_exact():
         rho=c.flow.density, mu=c.flow.viscosity, forcing=f,
     )
     # With the correct forcing the momentum residual vanishes.
-    assert float(rx.abs().max()) < 1e-6
-    assert float(ry.abs().max()) < 1e-6
-    assert float(cont.abs().max()) < 1e-9
+    assert float(rx.detach().abs().max()) < 1e-6
+    assert float(ry.detach().abs().max()) < 1e-6
+    assert float(cont.detach().abs().max()) < 1e-9
 
 
 def test_field_statistics_physiological():

@@ -1,0 +1,60 @@
+# Backbone B -- FSI-INFORMED: identical Navier-Stokes residual, but the momentum
+# equation additionally includes the FSI body-forcing term supplied by the
+# IBAMR/IBFE simulation (net effect of myocardial active contraction /
+# structural coupling). Everything else is identical to the baseline so the
+# comparison isolates the effect of the FSI forcing.
+experiment: fsi_informed
+seed: 0
+device: cpu
+
+geometry:
+  r0_x: 0.020
+  r0_y: 0.030
+  strain_amplitude: 0.18
+
+flow:
+  period: 0.9
+  vortex_strength: 0.35
+  inflow_strength: 0.25
+  pressure_amplitude: 400.0
+  density: 1060.0
+  viscosity: 0.0035
+
+doppler:
+  transducer: [0.0, -0.075]
+  n_points_per_frame: 300
+  n_frames: 12
+  noise_level: 0.05
+  seed: 0
+
+collocation:
+  n_interior: 4000
+  n_wall: 800
+  n_frames: 16
+
+model:
+  hidden_width: 128
+  hidden_depth: 5
+  activation: tanh
+  fourier_features: 32
+  fourier_scale: 5.0
+  output_pressure: true
+
+physics:
+  backbone: fsi_informed
+  forcing_scale: 1.0
+  enforce_continuity: true
+
+train:
+  iterations: 8000
+  lr: 0.001
+  lr_decay: 0.5
+  lr_decay_every: 3000
+  batch_interior: 2048
+  batch_wall: 512
+  log_every: 500
+  weights:
+    data: 1.0
+    continuity: 1.0
+    momentum: 1.0
+    wall: 10.0

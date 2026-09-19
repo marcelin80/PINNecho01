@@ -1,0 +1,9 @@
+# Core numerical / ML stack for PINNecho Stage 1 (CPU-friendly).
+# For a CPU-only install of torch, use:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+numpy>=1.24
+scipy>=1.10
+torch>=2.0
+matplotlib>=3.7
+pyyaml>=6.0
+pytest>=7.0

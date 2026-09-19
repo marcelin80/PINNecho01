@@ -1,0 +1,43 @@
+# Tiny/fast configuration for CPU smoke tests and CI. Not for science -- just
+# exercises the full generate -> train -> evaluate -> compare pipeline quickly.
+experiment: smoke
+seed: 0
+device: cpu
+
+geometry:
+  r0_x: 0.020
+  r0_y: 0.030
+  strain_amplitude: 0.18
+
+flow:
+  period: 0.9
+  vortex_strength: 0.35
+  inflow_strength: 0.25
+  pressure_amplitude: 400.0
+
+doppler:
+  n_points_per_frame: 80
+  n_frames: 6
+  noise_level: 0.05
+
+collocation:
+  n_interior: 800
+  n_wall: 200
+  n_frames: 8
+
+model:
+  hidden_width: 48
+  hidden_depth: 3
+  fourier_features: 16
+  fourier_scale: 5.0
+
+physics:
+  backbone: baseline
+
+train:
+  iterations: 300
+  lr: 0.002
+  lr_decay_every: 200
+  batch_interior: 512
+  batch_wall: 128
+  log_every: 100

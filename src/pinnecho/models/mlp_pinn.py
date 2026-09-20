@@ -130,6 +130,16 @@ class PINNNet(nn.Module):
             raise ValueError("spatial_dim must be 2 or 3")
         self.spatial_dim = spatial_dim
         self.predict_scalar = predict_scalar
+        # Record constructor args so a checkpoint can rebuild the exact model.
+        self._init_kwargs = dict(
+            spatial_dim=spatial_dim, width=width, depth=depth,
+            activation=activation, fourier_features=fourier_features,
+            fourier_scales=tuple(fourier_scales), predict_scalar=predict_scalar,
+            input_lows=list(input_lows) if input_lows is not None else None,
+            input_highs=list(input_highs) if input_highs is not None else None,
+            velocity_scale=float(velocity_scale), pressure_scale=float(pressure_scale),
+            scalar_scale=float(scalar_scale), fourier_seed=fourier_seed,
+        )
         in_dim = spatial_dim + 1  # spatial coords + time
 
         # Output heads: velocity (spatial_dim) + pressure (1) + scalar (0/1).
@@ -226,3 +236,19 @@ class PINNNet(nn.Module):
         """Convenience: list of velocity components for the physics residuals."""
         f = self.fields(X)
         return [f[k] for k in (["u", "v", "w"][: self.spatial_dim])]
+
+    def save_checkpoint(self, path, meta: Optional[dict] = None) -> None:
+        """Save constructor kwargs + weights (and optional metadata)."""
+        import os
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        torch.save({"init_kwargs": self._init_kwargs,
+                    "state_dict": self.state_dict(),
+                    "meta": meta or {}}, path)
+
+    @classmethod
+    def from_checkpoint(cls, path, map_location="cpu") -> "PINNNet":
+        """Rebuild a :class:`PINNNet` from a checkpoint written by ``save_checkpoint``."""
+        ckpt = torch.load(path, map_location=map_location, weights_only=False)
+        model = cls(**ckpt["init_kwargs"])
+        model.load_state_dict(ckpt["state_dict"])
+        return model

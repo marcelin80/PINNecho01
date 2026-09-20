@@ -271,56 +271,24 @@ def make_toy_batch_builder(dataset, seed: int = 0,
     return build_batches
 
 
-def main() -> None:  # pragma: no cover - CLI wiring
-    """CLI: train Model A end-to-end on the toy 2D case with the spec modules."""
-    import argparse
-    from ..config import load_config, Config
-
-    parser = argparse.ArgumentParser(description="Train Model A (toy 2D case).")
-    parser.add_argument("--config", default=None, help="YAML config (geometry/flow).")
-    parser.add_argument("--steps", type=int, default=3000)
-    parser.add_argument("--lbfgs-iters", type=int, default=300)
-    parser.add_argument("--lr", type=float, default=2e-3)
-    parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
-
-    torch.set_default_dtype(torch.float64)
-    config = load_config(args.config) if args.config else Config()
-
-    model, loss_fn, dataset, lv = build_toy_model_a(config)
-    loss_fn.anneal.total_steps = args.steps
-    build_batches = make_toy_batch_builder(dataset, seed=args.seed)
-    cfg = TrainConfig(steps=args.steps, lr=args.lr, lbfgs_iters=args.lbfgs_iters,
-                      log_every=max(1, args.steps // 10), seed=args.seed)
-
-    def logger(step, row):
-        print(f"[{step:5d}] " + " ".join(f"{k}={row[k]:.4e}" for k in
-              ("total", "data", "pde", "bc") if k in row))
-
-    print("Training Model A (baseline, kinematic no-slip) on the toy 2D case...")
-    train_model(model, loss_fn, build_batches, cfg, logger=logger)
-
-    from ..train.evaluate_toy import evaluate_toy  # local to avoid cycles
-    metrics = evaluate_toy(model, lv, config)
-    print("\nHeld-out reconstruction metrics (relative L2 unless noted):")
-    for k, v in metrics.items():
-        print(f"  {k:28s} {v:.4f}")
-
-
 def compare_backbones_toy(config, steps: int = 3000, lbfgs_iters: int = 300,
                           lr: float = 2e-3, seed: int = 0,
-                          use_traction: bool = False, verbose: bool = True):
+                          use_traction: bool = False, verbose: bool = True,
+                          return_models: bool = False):
     """Train Model A and Model B on the SAME data/init and return side-by-side.
 
     The only differences between the two runs are the FSI momentum forcing, the
     FSI wall-velocity BC, and (optionally) the traction-continuity penalty. The
     network, initialisation, dataset, optimiser schedule and batch order are
     identical, so the comparison isolates the backbone effect.
+
+    Returns ``results`` (dict per backbone). If ``return_models`` is True, returns
+    ``(results, models, dataset, lv)`` where ``models`` maps backbone -> PINNNet.
     """
     from ..train.evaluate_toy import evaluate_toy
 
     dataset, lv = build_toy_dataset(config)
-    results = {}
+    results, models = {}, {}
     for backbone in ("baseline", "fsi_informed"):
         model, loss_fn = build_toy_model(
             config, dataset, backbone=backbone, init_seed=seed,
@@ -344,6 +312,9 @@ def compare_backbones_toy(config, steps: int = 3000, lbfgs_iters: int = 300,
                     if k in row))
         train_model(model, loss_fn, build_batches, cfg, logger=logger)
         results[backbone] = evaluate_toy(model, lv, config)
+        models[backbone] = model
+    if return_models:
+        return results, models, dataset, lv
     return results
 
 
@@ -358,9 +329,10 @@ def main() -> None:  # pragma: no cover - CLI wiring
     parser.add_argument("--lbfgs-iters", type=int, default=300)
     parser.add_argument("--lr", type=float, default=2e-3)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--dtype", choices=["float32", "float64"], default="float64")
     args = parser.parse_args()
 
-    torch.set_default_dtype(torch.float64)
+    torch.set_default_dtype(torch.float64 if args.dtype == "float64" else torch.float32)
     config = load_config(args.config) if args.config else Config()
 
     model, loss_fn, dataset, lv = build_toy_model_a(config)
@@ -399,9 +371,10 @@ def compare_main() -> None:  # pragma: no cover - CLI wiring
     parser.add_argument("--traction", action="store_true",
                         help="add the traction-continuity penalty to Model B")
     parser.add_argument("--out", default=None, help="write comparison.json here")
+    parser.add_argument("--dtype", choices=["float32", "float64"], default="float64")
     args = parser.parse_args()
 
-    torch.set_default_dtype(torch.float64)
+    torch.set_default_dtype(torch.float64 if args.dtype == "float64" else torch.float32)
     config = load_config(args.config) if args.config else Config()
     results = compare_backbones_toy(
         config, steps=args.steps, lbfgs_iters=args.lbfgs_iters, lr=args.lr,
@@ -421,6 +394,76 @@ def compare_main() -> None:  # pragma: no cover - CLI wiring
         with open(args.out, "w") as fh:
             json.dump(results, fh, indent=2)
         print(f"\nWrote {args.out}")
+
+
+def visualize_main() -> None:  # pragma: no cover - CLI wiring
+    """CLI: train A and B on the toy case, then render figures + a cycle GIF.
+
+    Produces, under ``--out``:
+
+    * ``fields_t*.png``  -- truth / A / B panels (speed, vorticity, pressure)
+    * ``metric_bars.png``-- grouped bar chart of held-out relative-L2 errors
+    * ``cycle_speed.gif`` / ``cycle_vorticity.gif`` -- cardiac-cycle animations
+    * ``model_{baseline,fsi_informed}.pt`` -- checkpoints
+    * ``comparison.json`` -- the metric dictionary
+    """
+    import argparse
+    import json
+    from pathlib import Path
+    from ..config import load_config, Config
+    from ..eval import visualize as viz
+
+    parser = argparse.ArgumentParser(description="Visualise A vs B (toy case).")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--steps", type=int, default=2000)
+    parser.add_argument("--lbfgs-iters", type=int, default=200)
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--traction", action="store_true")
+    parser.add_argument("--dtype", choices=["float32", "float64"], default="float32")
+    parser.add_argument("--out", default="docs/results")
+    parser.add_argument("--grid", type=int, default=90)
+    parser.add_argument("--frames", type=int, default=24)
+    parser.add_argument("--no-anim", action="store_true")
+    args = parser.parse_args()
+
+    torch.set_default_dtype(torch.float64 if args.dtype == "float64" else torch.float32)
+    config = load_config(args.config) if args.config else Config()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    results, models, _dataset, lv = compare_backbones_toy(
+        config, steps=args.steps, lbfgs_iters=args.lbfgs_iters, lr=args.lr,
+        seed=args.seed, use_traction=args.traction, return_models=True,
+    )
+
+    for name, model in models.items():
+        model.save_checkpoint(out / f"model_{name}.pt",
+                              meta={"backbone": name, "metrics": results.get(name, {})})
+    with open(out / "comparison.json", "w") as fh:
+        json.dump(results, fh, indent=2)
+
+    # Representative frames: early filling and peak systole-ish.
+    for frac in (0.3, 0.6):
+        t = frac * float(config.flow.period)
+        p = viz.plot_ab_panels(lv, models, config, t,
+                               out / f"fields_t{frac:.2f}.png", n=args.grid)
+        print(f"wrote {p}")
+    print(f"wrote {viz.plot_metric_bars(results, out / 'metric_bars.png')}")
+
+    if not args.no_anim:
+        for field in ("speed", "vorticity"):
+            p = viz.animate_cycle(lv, models, config, out / f"cycle_{field}.gif",
+                                  field=field, frames=args.frames,
+                                  n=min(args.grid, 80))
+            print(f"wrote {p}" if p else f"(animation writer unavailable for {field})")
+
+    print("\n=== metrics ===")
+    keys = sorted({k for r in results.values() for k in r})
+    for k in keys:
+        a = results['baseline'].get(k, float('nan'))
+        b = results['fsi_informed'].get(k, float('nan'))
+        print(f"{k:28s} A={a:8.4f}  B={b:8.4f}  delta={b - a:+8.4f}")
 
 
 if __name__ == "__main__":  # pragma: no cover

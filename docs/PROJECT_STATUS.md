@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **66 passing** (`pytest`)
+> 테스트: **68 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -98,16 +98,21 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
   둔감), 크기 지표 relL2만 0.17→0.21(~24%) 악화.
 
 **추가 대조 실험(point 1·2 검증):**
-- **Check 0 (순환성 게이트)**: `corr(forcing, ∇p)=0.95`, ∇p가 forcing 크기의 94% → 현 forcing은
-  사실상 압력 그라디언트. 재설계 검증의 정량 게이트(`--which coupling`).
+- **Check 0 (순환성 게이트, 학습 불필요)**: `corr(forcing, ∇p)=0.95`, ∇p가 forcing 크기의 94% →
+  현 forcing은 사실상 압력 그라디언트. **Check 0b(vorticity 게이트)**: `corr(f, μ∇×ω)≈0`,
+  점성=vorticity-curl 항은 forcing의 **0.23%뿐**(관성 지배 혈류) → **vorticity-leak 가설은
+  반증**됨. 재설계 검증은 두 게이트(`--which coupling`).
 - **Ablation 3 (압력=관측 부족의 하류 증상)**: baseline+정확 벽에서 음향창 1→3으로 늘리면 교차빔
   `u` 0.96→0.67, pressure corr −0.04→0.30 동반 개선(결합 −0.67). 압력 실패는 "물리항 부재"가
   아니라 단일창 관측 부족 탓.
 - **Ablation 4 (관측 vs 물리 대체, 비순환)**: 속도/교차빔은 2번째 창이 압도(대체 불가)하나,
-  구배량은 `w1_forcing`이 `w2_baseline`을 상회(와도 0.78 vs 0.76, WSS 0.66 vs 0.56) → 물리는
-  구배 병목, 다중창은 속도 병목을 각각 공략.
+  구배량은 `w1_forcing`이 `w2_baseline`을 상회.
+- **Ablation 5 (forcing 섭동 + paired 통계)**: 구배 이득은 forcing 30% 섭동에도 강건.
+  paired 검정에서 **WSS는 유의**(t=5.09, 3/3, Δ+0.098), **vorticity는 경향**(t=1.53). 최종
+  주장은 "WSS에 한해 유의한 물리-창 대체"로 정정.
 - 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료
-  `docs/results/ablations_all.json`(전체) · `docs/results/ablations.json`(초기 2종).
+  `docs/results/ablations_all.json`(Check0+1~4) · `docs/results/ablation5.json`(Ablation 5) ·
+  `docs/results/ablations.json`(초기 2종).
 - (참고) 초기 단일시드 비교 원자료: `docs/results/stage2_forcing.json`,
   `docs/results/stage2_traction.json`.
 
@@ -158,7 +163,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (66 passing)
+## 6. 테스트 현황 (68 passing)
 
 | 파일 | 검증 대상 |
 |---|---|

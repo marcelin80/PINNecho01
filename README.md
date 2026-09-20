@@ -328,15 +328,22 @@ meaningful (full analysis in [`docs/ABLATIONS.md`](docs/ABLATIONS.md)):
 * **FSI physics and extra windows fix *different* bottlenecks.** A second acoustic
   window dominates for the velocity field (forcing cannot substitute), but for the
   **gradient** quantities a single window **+ FSI forcing beats two windows without
-  it** (vorticity corr 0.782 vs 0.764, WSS corr 0.659 vs 0.561) — and those are
-  exactly the quantities (vorticity, WSS) this project targets. So the defensible
-  framing is: *FSI priors don't replace an acoustic window in general, but they do
-  for the velocity-gradient quantities; the two are complementary.*
+  it**. This gradient advantage is *not* a vorticity analogue of the pressure
+  circularity: the viscous term `−μ∇²u = μ∇×ω` is only **0.23 %** of the forcing
+  magnitude (cardiac flow is inertia-dominated), so `corr(f, μ∇×ω) ≈ 0` — the
+  forcing does not inject vorticity. A **forcing-uncertainty stress test** (up to
+  30 % perturbation) leaves the gradient advantage intact, and per-seed **paired
+  stats** make it statistically significant for **WSS** (Δcorr +0.098, t = 5.09,
+  3/3 seeds) though only a **trend** for vorticity (t = 1.53). Defensible framing:
+  *FSI priors don't replace an acoustic window in general, but for wall shear
+  stress they significantly do (non-circular, robust to forcing error); the two
+  approaches are complementary.*
 
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
 [`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json),
 control ablations [`docs/results/ablations_all.json`](docs/results/ablations_all.json)
-(comprehensive) and [`docs/results/ablations.json`](docs/results/ablations.json).
+(Check 0 + Ablations 1–4), [`docs/results/ablation5.json`](docs/results/ablation5.json)
+(forcing stress test + paired stats), and [`docs/results/ablations.json`](docs/results/ablations.json).
 
 > The table above uses a *coincident* wall velocity for A and B, so it isolates
 > the effect of the momentum forcing alone. Stage 2 (below) makes the wall

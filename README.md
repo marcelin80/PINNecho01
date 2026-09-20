@@ -453,35 +453,40 @@ measurement **SNR**, and **sparsity** (points/frame) — and reports held-out
 reconstruction error, quantifying the single-component observability bottleneck.
 
 ```bash
-python scripts/observability_sweep.py --dtype float32 --steps 1800 --seeds 0 1 \
+python scripts/observability_sweep.py --backbone baseline --no-traction \
+    --dtype float32 --steps 2000 --lbfgs-iters 200 --seeds 0 1 2 3 4 \
     --out docs/results/observability
 ```
 
-It writes `sweep.json` and per-metric bar charts (`sweep_vel_relL2_speed.png`,
-`sweep_vel_relL2_v.png`, `sweep_wss_relL2.png`) under
+It writes `sweep.json` and per-metric bar charts (`sweep_vel_relL2_u.png`,
+`sweep_vel_relL2_speed.png`, `sweep_vel_relL2_v.png`, `sweep_wss_relL2.png`,
+`sweep_pressure_corr.png`) under
 [`docs/results/observability/`](docs/results/observability).
 
-Reference sweep (Model B, fsi_informed + traction; 1800 Adam + 200 L-BFGS steps,
-float32, CPU; relative L2, ↓):
+**FSI-independent** reference sweep (`baseline` backbone — *no FSI, no traction*;
+2000 Adam + 200 L-BFGS steps, float32, CPU; **5 seeds**, mean ± std; relative L2 ↓,
+corr ↑):
 
-| condition | SNR (dB) | windows | pts/frame | speed | `u` | `v` | vorticity | WSS | pressure |
+| condition | win | SNR (dB) | pts | `u` relL2 | `v` relL2 | speed | vort corr | WSS corr | p corr |
 |---|---|---|---|---|---|---|---|---|---|
-| **windows=1** | 26 | 1 | 300 | 0.568 | 0.969 | 0.564 | 0.711 | 0.741 | 0.219 |
-| **windows=2** | 26 | 2 | 300 | **0.555** | **0.815** | 0.579 | 0.714 | **0.725** | **0.172** |
-| noise=0.02 | 34 | 1 | 300 | 0.569 | 0.972 | 0.563 | 0.715 | 0.744 | 0.221 |
-| noise=0.10 | 20 | 1 | 300 | 0.574 | 0.968 | 0.582 | 0.729 | 0.756 | 0.228 |
-| points=150 | 26 | 1 | 150 | 0.573 | 0.972 | 0.545 | 0.714 | 0.755 | 0.232 |
-| points=600 | 26 | 1 | 600 | 0.562 | 0.972 | 0.564 | 0.721 | 0.743 | 0.229 |
+| **windows=1** | 1 | 26 | 300 | **0.982 ±0.004** | 0.718 | 0.714 | 0.582 | 0.428 | −0.154 |
+| **windows=2** | 2 | 26 | 300 | **0.855 ±0.036** | 0.760 | 0.690 | 0.565 | 0.271 | −0.032 |
+| **windows=3** | 3 | 26 | 300 | **0.749 ±0.040** | 0.811 | 0.712 | 0.598 | 0.205 | 0.241 |
+| noise=0.02 | 1 | 34 | 300 | 0.983 | 0.720 | 0.716 | 0.579 | 0.423 | −0.118 |
+| noise=0.10 | 1 | 20 | 300 | 0.982 | 0.720 | 0.717 | 0.576 | 0.426 | −0.115 |
+| points=150 | 1 | 26 | 150 | 0.986 | 0.701 | 0.707 | 0.579 | 0.417 | −0.028 |
+| points=600 | 1 | 26 | 600 | 0.978 | 0.695 | 0.703 | 0.575 | 0.405 | 0.007 |
 
-**The dominant lever is angular coverage, not noise or density.** The primary
-(apical) window's beam is nearly aligned with `y`, so it observes `v` well
-(relL2 0.56) but the cross-beam `u` component barely at all (relL2 **0.97**).
-Adding a second, angled window collapses the `u` error to **0.815** and improves
-speed, WSS and pressure — whereas varying SNR across 20–34 dB or sampling density
-across 150–600 pts/frame changes every metric by only ~1–2%. This quantifies the
-single-component **observability bottleneck**: the reconstruction is limited by
-*how many directions are measured*, and the physics prior fills the rest.
-Raw numbers: [`docs/results/observability/sweep.json`](docs/results/observability/sweep.json).
+**Angular coverage is the lever, not noise or density.** The apical beam is nearly
+aligned with `y`, so one window observes `v` (relL2 0.72) but leaves the cross-beam
+`u` essentially unconstrained (**0.982**). Extra windows drive `u` down monotonically
+and well outside seed scatter (0.982 → 0.855 → **0.749**), and pressure corr rises in
+lockstep (−0.15 → −0.03 → **+0.24**, the Ablation-3 coupling), whereas 20–34 dB SNR or
+150–600 pts/frame move every metric by <1–2% (within seed noise). Caveat: it is *not*
+a free lunch — the primary `v` and **WSS corr** slightly *degrade* with more windows.
+This whole result uses **no FSI**, so it is orthogonal to the circularity debate.
+Full write-up: **[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)**; raw numbers:
+[`docs/results/observability/sweep.json`](docs/results/observability/sweep.json).
 
 ### 3D end-to-end validation
 

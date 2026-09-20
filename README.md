@@ -161,8 +161,11 @@ PINNecho01/
 │   │   ├── synthetic_lv_3d.py   # 3D volume-preserving ellipsoid ground truth
 │   │   ├── doppler.py           # single-component sparse Doppler sampling
 │   │   ├── dataset.py           # measurement + collocation + wall point sets
-│   │   ├── load_ibfe_output.py  # [TODO STUB] real IBFE loader (documented shapes)
-│   │   └── synthesize_doppler.py# [TODO STUB] Doppler synthesis (documented shapes)
+│   │   ├── load_ibfe_output.py  # IBFEFrames + real loader dispatch + synthetic exporters (2D/3D, valve)
+│   │   ├── ibfe_io.py           # NPZ + manifest/CSV (+VTK) readers/writers for IBFEFrames
+│   │   ├── ibfe_validate.py     # validate_ibfe_frames: contract + physical-sanity checks
+│   │   ├── ibfe_dataset.py      # IBFEFrames -> training batches / model / evaluate / train_ibfe
+│   │   └── synthesize_doppler.py# canonical Doppler synthesis (sparsity/aliasing/SNR)
 │   ├── models/
 │   │   ├── mlp.py               # Fourier-feature MLP (Stage-1 demo)
 │   │   ├── pinn.py              # (x,y,t) -> (u,v,p), with non-dimensionalisation
@@ -449,12 +452,41 @@ loss, trainer) works in 3D: the loss decreases and every field is finite. Full
 small CPU network) — a short run reaches ~0.8 velocity relL2 — and is a target
 for a larger-budget / richer-acquisition run.
 
+### Preparing real IBAMR/IBFE data
+
+The remaining items are all *data-gated* — they need a real IBFE export. The
+ingestion pipeline for that data is now built and tested, so plugging in real
+data requires **no code changes**, only matching the on-disk contract. See the
+step-by-step [**data-preparation guide**](docs/DATA_PREPARATION.md).
+
+* **On-disk formats** (`data/ibfe_io.py`): a single-file **NPZ bundle** or a
+  **`manifest.yaml` + per-frame CSV** directory (annotated template:
+  [`configs/ibfe_manifest.template.yaml`](configs/ibfe_manifest.template.yaml)),
+  plus an optional VTK/Exodus hook (`meshio`). `load_ibfe_output(path)` dispatches
+  by path type; `time_range` / `subsample` restrict/thin large meshes.
+* **Concrete example**: `python scripts/make_example_ibfe_export.py --dim {2,3}
+  [--valve]` writes a filled-in export (both formats) to copy from.
+* **Validator** (`data/ibfe_validate.py`): `validate_ibfe_frames(frames)` checks
+  shapes, finiteness, unit-length normals, single-cycle time coverage and
+  physical-magnitude sanity before training.
+* **Training adapter** (`data/ibfe_dataset.py`): `train_ibfe(frames, backbone=…,
+  use_traction=…, predict_scalar=…)` feeds the bundle straight into the shared
+  network + composite loss (beam-only Doppler data, PDE + FSI forcing, wall/valve
+  Dirichlet, traction continuity, residence-time inflow reinit); `evaluate_ibfe`
+  reports held-out error. Run it twice (baseline vs fsi_informed) for the A/B
+  ablation on real data.
+* **3D + valves**: `synthetic_ibfe_frames_3d(...)` and a `with_valve` option on the
+  synthetic exporters populate the 3D fields and the **mitral inflow** point set,
+  so the 3D and residence-time paths are exercised end-to-end today against the
+  exact interface real data will use.
+
 ### Deferred to real data / future work
 
 * **Residence-time (scalar) reconstruction** needs a true inflow boundary
   (mitral valve) to reinitialise `c = 0`; the closed, area-preserving synthetic
-  cavity has no real inflow, so this is gated on the real IBFE valve data (the
-  scalar-transport residual and the `c` head are implemented and unit-tested).
+  cavity has no real inflow. The plumbing is complete and tested (scalar-transport
+  residual, `c` head, inflow reinit, and a `with_valve` inflow point set); only a
+  real (or open-cavity) mitral inflow field is outstanding.
 * **Higher-fidelity 3D** — the 3D path is validated end-to-end (above); reaching
   clinical-grade 3D accuracy needs a larger training budget, richer multi-window
   acquisition, and ultimately a real IBFE 3D ground truth.

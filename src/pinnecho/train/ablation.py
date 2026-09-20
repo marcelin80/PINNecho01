@@ -44,6 +44,7 @@ single-seed artefact.
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -409,14 +410,41 @@ def run_observability_physics(config, *, seeds: Sequence[int] = (0, 1, 2),
     return {k: _aggregate(v) for k, v in per_variant.items()}
 
 
+def _binom_tail(k: int, n: int) -> float:
+    """P(X >= k) for X ~ Binomial(n, 0.5), exact, no SciPy."""
+    if k <= 0:
+        return 1.0
+    total = 0.0
+    for j in range(k, n + 1):
+        total += math.comb(n, j)
+    return total / (2.0 ** n)
+
+
+def _sign_test(wins: int, n: int) -> Tuple[float, float]:
+    """Exact binomial sign test on ``wins`` successes out of ``n`` nonzero pairs.
+
+    Returns ``(p_one_sided, p_two_sided)``. The sign test ignores effect *size*
+    and asks only whether the *direction* is consistent -- complementary to the
+    paired t-test, which is underpowered at small ``n`` but sensitive to size.
+    """
+    if n <= 0:
+        return float("nan"), float("nan")
+    p_one = _binom_tail(wins, n)
+    extreme = max(wins, n - wins)
+    p_two = min(1.0, 2.0 * _binom_tail(extreme, n))
+    return float(p_one), float(p_two)
+
+
 def _paired_stats(a: Sequence[float], b: Sequence[float],
                   higher_better: bool = True) -> Dict[str, float]:
     """Per-seed paired comparison of ``a`` vs ``b`` (paired by index/seed).
 
     Returns the mean/std of the difference ``a - b``, a paired t-statistic
-    ``mean / (std / sqrt(n))``, the count of pairs where ``a`` wins, and ``n``.
-    No SciPy dependency: we report ``t`` and ``n`` so significance can be judged
-    against a t-table (e.g. |t|>4.30 for a two-sided 0.05 test at dof=2).
+    ``mean / (std / sqrt(n))``, the count of pairs where ``a`` wins, ``n``, and an
+    exact binomial **sign-test** p-value (one- and two-sided). We report both the
+    t-test (size-sensitive, low power at small n) and the sign test (direction-
+    only) because they can disagree: e.g. 5/5 wins gives sign-test one-sided
+    p=0.031 (significant) even when |t| misses the dof=4 threshold of 2.78.
     """
     x = np.asarray(a, dtype=float)
     y = np.asarray(b, dtype=float)
@@ -427,8 +455,11 @@ def _paired_stats(a: Sequence[float], b: Sequence[float],
     std = float(diff.std(ddof=1)) if n > 1 else 0.0
     t = float(mean / (std / np.sqrt(n))) if (n > 1 and std > 1e-12) else float("nan")
     wins = int((diff > 0).sum()) if higher_better else int((diff < 0).sum())
+    nz = int((diff != 0).sum())
+    p_one, p_two = _sign_test(wins, nz)
     return {"mean_diff": mean, "std_diff": std, "t_stat": t,
-            "n_wins": float(wins), "n": float(n)}
+            "n_wins": float(wins), "n": float(n),
+            "sign_p_one_sided": p_one, "sign_p_two_sided": p_two}
 
 
 def run_forcing_perturbation(config, *, seeds: Sequence[int] = (0, 1, 2),
@@ -713,7 +744,8 @@ def main() -> None:  # pragma: no cover - CLI wiring
         for metric, st in fp["paired"].items():
             print(f"    {metric:16s} mean_diff={st['mean_diff']:+.4f} "
                   f"std={st['std_diff']:.4f} t={st['t_stat']:+.3f} "
-                  f"wins={int(st['n_wins'])}/{int(st['n'])}")
+                  f"wins={int(st['n_wins'])}/{int(st['n'])} "
+                  f"sign_p(1)={st.get('sign_p_one_sided', float('nan')):.3f}")
         payload["forcing_perturbation"] = {
             "levels": {k: {m: list(v) for m, v in r.items()}
                        for k, r in fp["levels"].items()},
@@ -733,7 +765,8 @@ def main() -> None:  # pragma: no cover - CLI wiring
         for name, st in fs["paired"].items():
             print(f"    {name:32s} mean_diff={st['mean_diff']:+.4f} "
                   f"std={st['std_diff']:.4f} t={st['t_stat']:+.3f} "
-                  f"wins={int(st['n_wins'])}/{int(st['n'])}")
+                  f"wins={int(st['n_wins'])}/{int(st['n'])} "
+                  f"sign_p(1)={st.get('sign_p_one_sided', float('nan')):.3f}")
         payload["forcing_shuffle"] = {
             "variants": {k: {m: list(v) for m, v in r.items()}
                          for k, r in fs["variants"].items()},

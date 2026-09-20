@@ -92,6 +92,17 @@ def test_paired_stats():
     assert st["mean_diff"] > 0
 
 
+def test_sign_test_matches_exact_binomial():
+    from pinnecho.train.ablation import _sign_test
+    one5, two5 = _sign_test(5, 5)
+    assert abs(one5 - 1.0 / 32.0) < 1e-9        # 5/5 one-sided = (1/2)^5
+    assert abs(two5 - 2.0 / 32.0) < 1e-9
+    st = _paired_stats([0.79, 0.78, 0.80, 0.77, 0.81],
+                       [0.75, 0.76, 0.74, 0.73, 0.77], higher_better=True)
+    assert st["n_wins"] == 5
+    assert abs(st["sign_p_one_sided"] - 1.0 / 32.0) < 1e-9
+
+
 def test_forcing_perturbation_tiny():
     torch.set_default_dtype(torch.float32)
     cfg = Config()

@@ -110,8 +110,18 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             n_data: int = 3072, n_col: int = 3072,
                             n_wall: int = 768, n_valve: int = 256,
                             use_traction: bool = False,
-                            predict_scalar: bool = False):
-    """Return a ``build_batches(step)`` closure sourced from ``frames``."""
+                            predict_scalar: bool = False,
+                            shuffle_forcing: bool = False):
+    """Return a ``build_batches(step)`` closure sourced from ``frames``.
+
+    ``shuffle_forcing`` enables the **forcing-shuffle diagnostic** (see
+    ``pinnecho.train.ablation.run_forcing_shuffle`` and ``docs/ABLATIONS.md``
+    Ablation 6) on *real* IBFE forcing: the fluid forcing rows are randomly
+    permuted (same marginal distribution, trajectory correspondence destroyed).
+    Run A/B with this on and off; if the exact-vs-shuffled gap seen on synthetic
+    data collapses for real (independently-estimated) FSI forcing, the physics
+    benefit is genuine rather than trajectory injection.
+    """
     from .ibfe_io import frames_to_dtype
     frames = frames_to_dtype(frames, torch.get_default_dtype())
     dim = frames.spatial_dim
@@ -120,6 +130,12 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     data_X, beam_dir, v_beam = build_doppler_from_frames(
         frames, transducers, noise_level=noise_level, seed=seed)
     g = torch.Generator().manual_seed(seed)
+
+    forcing_fluid = frames.forcing_fluid
+    if shuffle_forcing and forcing_fluid.shape[0] > 1:
+        gp = torch.Generator().manual_seed(seed + 991)
+        perm = torch.randperm(forcing_fluid.shape[0], generator=gp)
+        forcing_fluid = forcing_fluid[perm].clone()
 
     has_valve = frames.coords_mitral.shape[0] > 0
 
@@ -138,7 +154,7 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
             "data": {"X": data_X[di].clone(), "beam_dir": beam_dir[di],
                      "v_beam": v_beam[di]},
             "collocation": {"X": frames.coords_fluid[ci].clone(),
-                            "forcing": frames.forcing_fluid[ci]},
+                            "forcing": forcing_fluid[ci]},
             "wall": {"X": frames.coords_wall[wi].clone(),
                      "u_wall": frames.velocity_wall[wi]},
         }
@@ -235,15 +251,21 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                lbfgs_iters: int = 150, lr: float = 2e-3, seed: int = 0,
                predict_scalar: bool = False, use_traction: bool = False,
                transducers: Optional[Sequence] = None, noise_level: float = 0.05,
-               model_overrides: Optional[dict] = None, verbose: bool = True):
-    """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``."""
+               model_overrides: Optional[dict] = None, verbose: bool = True,
+               shuffle_forcing: bool = False):
+    """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
+
+    Set ``shuffle_forcing=True`` to run the Ablation-6 forcing-shuffle diagnostic
+    on real IBFE forcing (see ``make_ibfe_batch_builder``).
+    """
     model, loss_fn = build_model_for_ibfe(
         frames, backbone=backbone, predict_scalar=predict_scalar,
         use_traction=use_traction, init_seed=seed, model_overrides=model_overrides)
     loss_fn.anneal.total_steps = steps
     build_batches = make_ibfe_batch_builder(
         frames, transducers=transducers, noise_level=noise_level, seed=seed,
-        use_traction=use_traction, predict_scalar=predict_scalar)
+        use_traction=use_traction, predict_scalar=predict_scalar,
+        shuffle_forcing=shuffle_forcing)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

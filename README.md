@@ -327,17 +327,20 @@ findings into one robust result and one retracted claim:
   failure is inherited from the unobserved cross-beam velocity.
 * **A second acoustic window** dominates for the velocity field (forcing cannot
   substitute) — this observability result is circularity-independent and robust.
-* **The gradient (vorticity/WSS) advantage does *not* survive scrutiny.** A
-  **forcing-shuffle diagnostic** (replace the collocation forcing with a random
-  permutation of itself — same distribution, wrong trajectory) shows the advantage
-  is **not** generic physics regularisation: the shuffled forcing *hurts* vs.
-  baseline and `forcing_exact > forcing_shuffled` (5 seeds), so the benefit carries
-  **trajectory-specific information** — a nonlinear leak the correlation gates
-  (`corr(f,∇p)`, `corr(f,μ∇×ω)≈0`) could not see, because the dominant term
-  `ρDu/Dt` is a nonlinear function of the true `u`. Moreover, on a *fair
-  same-window* baseline the WSS forcing benefit is **not** significant (t = 0.70,
-  5 seeds); the earlier apparent WSS win was a confound (the 2-window baseline is
-  itself *worse* at WSS). **So in this manufactured setup, forcing-based gains
+* **The gradient advantage does *not* survive scrutiny — it is a nonlinear
+  trajectory leak.** A **forcing-shuffle diagnostic** (replace the collocation
+  forcing with a random permutation of itself — same distribution, wrong
+  trajectory) shows the benefit is **not** generic physics regularisation: the
+  shuffled forcing *hurts* vs. baseline and `forcing_exact > forcing_shuffled`
+  (5 seeds), so it carries **trajectory-specific information** — a nonlinear leak
+  the correlation gates (`corr(f,∇p)`, `corr(f,μ∇×ω)≈0`) could not see, because the
+  dominant term `ρDu/Dt` is a nonlinear function of the true `u`. Reporting t-test
+  **and** an exact sign test keeps the two gradient quantities distinct: on a *fair
+  same-window* baseline **WSS is null** (Δ +0.013, t = 0.70, 2/5, sign p = 0.81 —
+  the earlier apparent WSS win was a confound: the 2-window baseline is itself
+  *worse* at WSS), while **vorticity's direction is consistent** (5/5, sign
+  p = 0.031) though underpowered for the t-test to confirm magnitude — not dead,
+  but *undetermined*. **Either way, in this manufactured setup forcing-based gains
   (pressure *and* gradients) all carry an irreducible trajectory-information
   component; only an independently-estimated real FSI forcing can separate
   "physics prior" from "answer injection."** See [`docs/ABLATIONS.md`](docs/ABLATIONS.md)

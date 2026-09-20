@@ -184,56 +184,72 @@
         "std_diff": 0.03560400841424553,
         "t_stat": 2.272161315543202,
         "n_wins": 5.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.03125,
+        "sign_p_two_sided": 0.0625
       },
       "shuffled_vs_baseline:vorticity_corr": {
         "mean_diff": -0.010558795928955079,
         "std_diff": 0.009993116496830528,
         "t_stat": -2.362644873116403,
         "n_wins": 1.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.96875,
+        "sign_p_two_sided": 0.375
       },
       "exact_vs_shuffled:vorticity_corr": {
         "mean_diff": 0.046737504005432126,
         "std_diff": 0.038903059297389395,
         "t_stat": 2.686375774612358,
         "n_wins": 5.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.03125,
+        "sign_p_two_sided": 0.0625
       },
       "exact_vs_w2baseline:vorticity_corr": {
         "mean_diff": 0.02137237787246704,
         "std_diff": 0.02256307086037724,
         "t_stat": 2.1180667321119078,
         "n_wins": 5.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.03125,
+        "sign_p_two_sided": 0.0625
       },
       "exact_vs_baseline:wss_corr": {
         "mean_diff": 0.01303194761276245,
         "std_diff": 0.04164896302745191,
         "t_stat": 0.6996649765840701,
         "n_wins": 2.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.8125,
+        "sign_p_two_sided": 1.0
       },
       "shuffled_vs_baseline:wss_corr": {
         "mean_diff": -0.018755412101745604,
         "std_diff": 0.01964454512186583,
         "t_stat": -2.134861160966505,
         "n_wins": 1.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.96875,
+        "sign_p_two_sided": 0.375
       },
       "exact_vs_shuffled:wss_corr": {
         "mean_diff": 0.03178735971450806,
         "std_diff": 0.04236890437267282,
         "t_stat": 1.6776147082227315,
         "n_wins": 4.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.1875,
+        "sign_p_two_sided": 0.375
       },
       "exact_vs_w2baseline:wss_corr": {
         "mean_diff": 0.09811395406723022,
         "std_diff": 0.026604492488403207,
         "t_stat": 8.24633174007171,
         "n_wins": 5.0,
-        "n": 5.0
+        "n": 5.0,
+        "sign_p_one_sided": 0.03125,
+        "sign_p_two_sided": 0.0625
       }
     },
     "raw": {

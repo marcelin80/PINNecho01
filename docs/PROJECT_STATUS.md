@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **69 passing** (`pytest`)
+> 테스트: **71 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -111,10 +111,11 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
   구배량은 `w1_forcing`이 `w2_baseline`을 상회.
 - **Ablation 5 (forcing 섭동, 3시드)**: 구배 이득이 30% 섭동에 강건해 보였으나, 기준선이 2창
   baseline이고 n=3이라 취약 → Ablation 6에서 교정됨.
-- **Ablation 6 (forcing 셔플 진단, 5시드)**: 궤적-무관(순열) forcing은 이득을 못 지키고 오히려
-  해침(`shuffled−baseline` WSS/vorticity 모두 1/5). `exact>shuffled` → **구배 이득은 궤적-특이
-  비선형 누출**. 공정 동일-창 비교에서 WSS forcing 순효과 **무의미**(t=0.70). Ablation 5의
-  "유의"는 2창-baseline 교란(2창이 WSS를 오히려 악화)이었음.
+- **Ablation 6 (forcing 셔플 진단, 5시드) — 가장 결정적 실험**: 궤적-무관(순열) forcing은 이득을
+  못 지키고 오히려 해침(`shuffled−baseline` 1/5). `exact>shuffled` → **구배 이득은 궤적-특이
+  비선형 누출**(선형 상관 게이트가 못 잡음). 통계는 t-test + **부호검정** 병기: **WSS는 무효**
+  (동일 1창 t=0.70, 2/5, 부호 p=0.81; Ablation 5의 "유의"는 2창-baseline 교란), **vorticity는
+  방향 일관**(5/5, 부호 p=0.031)이나 t-test 크기 확정엔 검정력 부족 — 죽은 게 아니라 "미확정".
 - 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료
   `docs/results/ablations_all.json`(Check0+1~4) · `docs/results/ablation5.json` ·
   `docs/results/ablation6.json` · `docs/results/ablations.json`(초기 2종).
@@ -168,7 +169,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (69 passing)
+## 6. 테스트 현황 (71 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -198,6 +199,9 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 - **검증**: `validate_ibfe_frames(frames)` — shape·유한성·법선·시간·물리량 점검.
 - **학습**: `train_ibfe(frames, backbone=…, use_traction=…, predict_scalar=…)` →
   기존 네트워크+복합손실로 바로 학습, `evaluate_ibfe`로 홀드아웃 평가.
+- **셔플 진단(실데이터)**: `train_ibfe(..., shuffle_forcing=True)` → Ablation 6 진단을 **실제
+  IBFE forcing**에 그대로 재실행. 실 forcing은 u에서 역산한 게 아니라 독립 추정값이므로,
+  exact−shuffled 격차가 사라지면 그때는 "물리 사전지식의 순수 효과"로 주장 가능.
 - **예제**: `python scripts/make_example_ibfe_export.py --dim {2,3} [--valve]`.
 
 필드 요약: 유체 볼륨(`coords/velocity/pressure/forcing_fluid`), 인터페이스
@@ -224,9 +228,10 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
    (`--which coupling`)뿐 아니라 **셔플 진단(`--which forcing-shuffle`)까지 통과**해야 하며,
    근본적으로는 **독립 추정된 실제 FSI forcing**이 있어야 "물리 사전지식"과 "정답 주입"이
    분리된다.
-3. **실제로 푼 FSI 지상진값 확보(핵심 관문)** — manufactured 순환성을 원천 제거하는 유일한 길.
-   **단 IBAMR 실행 환경(접근/컴퓨팅) 미확보.** 확보 시 프레임 1주기를 NPZ/매니페스트로 내보내
-   `validate_ibfe_frames` → `train_ibfe`로 A/B + 셔플 진단.
+3. **실제로 푼 FSI 지상진값 확보(핵심 관문, 유일한 순환 제거 경로)** — 선행 관문은
+   **cardiac4d-pipeline의 AMR 3레벨 실런 검증**(별도 저장소; 본 PINNecho 워크스페이스 밖) →
+   심박 1주기 IBFE export → NPZ/매니페스트로 내보내 `validate_ibfe_frames` → `train_ibfe`로
+   A/B + `shuffle_forcing=True` 셔플 진단 재실행. **단 IBAMR 실행 환경(접근/컴퓨팅) 미확보.**
 4. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 speckle-tracking reproducibility
    문헌값으로 보정, `A_exact`를 공정 기준선으로 병기.
 5. 밸브 데이터가 있으면 `predict_scalar=True`로 잔류시간 복원, 3D는 예산·다중 윈도우 상향.

@@ -120,3 +120,21 @@ def test_adapter_batches_and_training():
     assert model.predict_scalar
     for v in metrics.values():
         assert v == v  # finite
+
+
+def test_ibfe_forcing_shuffle_decorrelates():
+    torch.set_default_dtype(torch.float32)
+    frames = _frames_2d()
+    plain = make_ibfe_batch_builder(frames, seed=0, n_col=frames.coords_fluid.shape[0])
+    shuf = make_ibfe_batch_builder(frames, seed=0, n_col=frames.coords_fluid.shape[0],
+                                   shuffle_forcing=True)
+    fp = plain(0)["collocation"]["forcing"]
+    fs = shuf(0)["collocation"]["forcing"]
+    assert fp.shape == fs.shape
+    # Same marginal (a permutation) but not the same per-row ordering.
+    assert torch.allclose(fp.sort(dim=0).values, fs.sort(dim=0).values, atol=1e-5)
+    assert not torch.allclose(fp, fs)
+    model, metrics = train_ibfe(frames, backbone="fsi_informed", steps=20,
+                                lbfgs_iters=0, shuffle_forcing=True, verbose=False)
+    for v in metrics.values():
+        assert v == v

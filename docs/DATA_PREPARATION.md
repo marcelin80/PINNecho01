@@ -141,3 +141,22 @@ missing forcing, non-unit normals).
 - For A-vs-B, call it twice with `backbone="baseline"` and `"fsi_informed"` on the
   same `frames` (identical architecture/data/init) — the same clean ablation used
   on the synthetic case.
+
+### Run the forcing-shuffle diagnostic on real forcing (recommended)
+
+On synthetic data the FSI benefit turned out to be a *trajectory* leak: the
+manufactured forcing is derived from the true `u`, so it encodes the answer
+(see [`ABLATIONS.md`](ABLATIONS.md) Ablation 6). Real IBFE forcing is
+*independently estimated* (structural solver), so the same diagnostic becomes the
+decisive test of whether the physics term genuinely helps:
+
+```python
+# fsi_informed with the true real forcing vs. a trajectory-decorrelated shuffle
+_, m_exact = train_ibfe(frames, backbone="fsi_informed", seed=s)
+_, m_shuf  = train_ibfe(frames, backbone="fsi_informed", seed=s, shuffle_forcing=True)
+```
+
+Repeat over several seeds and compare vorticity/WSS/pressure. If the exact-minus-
+shuffled gap that appears on synthetic data **collapses** for real forcing, the
+advantage is a genuine physics prior rather than answer injection — the claim the
+synthetic study could not establish.

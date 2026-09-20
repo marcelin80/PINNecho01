@@ -39,6 +39,7 @@ pinnecho-compare = "pinnecho.cli:compare_main"
 pinnecho-train-a = "pinnecho.train.train:main"
 pinnecho-compare-ab = "pinnecho.train.train:compare_main"
 pinnecho-visualize = "pinnecho.train.train:visualize_main"
+pinnecho-sweep = "pinnecho.train.observability:sweep_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

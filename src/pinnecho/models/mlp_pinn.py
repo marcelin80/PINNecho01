@@ -120,6 +120,9 @@ class PINNNet(nn.Module):
         predict_scalar: bool = True,
         input_lows: Optional[Sequence[float]] = None,
         input_highs: Optional[Sequence[float]] = None,
+        velocity_scale: float = 1.0,
+        pressure_scale: float = 1.0,
+        scalar_scale: float = 1.0,
         fourier_seed: Optional[int] = 0,
     ):
         super().__init__()
@@ -131,6 +134,14 @@ class PINNNet(nn.Module):
 
         # Output heads: velocity (spatial_dim) + pressure (1) + scalar (0/1).
         self.out_dim = spatial_dim + 1 + (1 if predict_scalar else 0)
+
+        # Output scales keep the raw network O(1) while heads carry physical
+        # magnitudes (u ~ velocity_scale, p ~ pressure_scale, c ~ scalar_scale).
+        # The transform is affine, so autograd through fields() gives correct
+        # physical derivatives for the residuals.
+        self.register_buffer("velocity_scale", torch.as_tensor(float(velocity_scale)))
+        self.register_buffer("pressure_scale", torch.as_tensor(float(pressure_scale)))
+        self.register_buffer("scalar_scale", torch.as_tensor(float(scalar_scale)))
 
         self._register_normalisation(in_dim, input_lows, input_highs)
 
@@ -203,12 +214,12 @@ class PINNNet(nn.Module):
         idx = 0
         names = ["u", "v", "w"][: self.spatial_dim]
         for name in names:
-            result[name] = out[:, idx:idx + 1]
+            result[name] = out[:, idx:idx + 1] * self.velocity_scale
             idx += 1
-        result["p"] = out[:, idx:idx + 1]
+        result["p"] = out[:, idx:idx + 1] * self.pressure_scale
         idx += 1
         if self.predict_scalar:
-            result["c"] = out[:, idx:idx + 1]
+            result["c"] = out[:, idx:idx + 1] * self.scalar_scale
         return result
 
     def velocity(self, X: torch.Tensor) -> List[torch.Tensor]:

@@ -205,15 +205,43 @@ specification incrementally. Current status:
 | Composite loss (data/pde/scalar/bc/ic/periodic) + annealing | `train/composite_loss.py` | **Implemented** (data loss is beam-component only) |
 | Model A kinematic BC + valve/inflow | `bc/boundary_conditions.py` | **Implemented** |
 | Validation metrics + spline baseline | `evaluate.py` | **Implemented** (primitives); end-to-end driver scaffolded |
-| Training entry | `train/train.py` | Loop implemented; toy-case wiring gated on confirmation |
+| Training entry | `train/train.py` | **Implemented**; Model A validated end-to-end on the toy 2D case |
 | IBFE loader / Doppler synthesis | `data/load_ibfe_output.py`, `data/synthesize_doppler.py` | **TODO stubs** with documented tensor shapes |
-| Model B (FSI wall velocity / traction continuity) | `bc/boundary_conditions.py` | **Not started** (deliberately, until Model A validates) |
+| Model B (FSI wall velocity / traction continuity) | `bc/boundary_conditions.py` | **Not started** (deliberately, until Model A validates — now next) |
 
 > **Staging.** Per the plan, Model B's traction-matching BC is not begun until
 > Model A trains successfully end-to-end on the toy 2D case, and each stage is
 > confirmed before the next. The Model B BC helpers exist as clearly-marked
 > `NotImplementedError` stubs so the interface is fixed but the ablation stays
 > honest.
+
+### Model A end-to-end on the toy case (spec modules)
+
+`scripts/train_model_a.py` trains the baseline backbone on the synthetic-LV toy
+case using the spec network + composite loss (no FSI forcing, kinematic no-slip):
+
+```bash
+python scripts/train_model_a.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300
+```
+
+Reference run (dual-window Doppler, plain-tanh 96×5 network, Adam + L-BFGS, CPU,
+held-out points across the cycle):
+
+| metric (relative L2, ↓) | Model A |
+|---|---|
+| speed | 0.447 |
+| velocity `u` / `v` | 0.641 / 0.537 |
+| vorticity (corr 0.82) | 0.578 |
+| wall shear stress (corr 0.65) | 0.506 |
+| pressure (corr −0.47) | 1.190 |
+| physics-free spline baseline (beam) | 1.059 |
+
+The data loss falls from ~1.0 (trivial `u=0`) to ~0.21, i.e. the network
+genuinely fits the sparse **single-component** Doppler and — via the physics —
+recovers the unseen cross-beam component and the velocity gradients (vorticity /
+WSS correlations 0.65–0.82). Pressure is poorly recovered by the baseline
+(`f = 0` momentum ⇒ wrong pressure gradient): this is exactly the weakness the
+**FSI-informed Model B** is designed to address next.
 
 ---
 

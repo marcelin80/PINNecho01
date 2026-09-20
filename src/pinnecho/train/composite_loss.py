@@ -96,6 +96,13 @@ class CompositeLoss:
     diffusivity: float = 1e-6
     scalar_source: float = 1.0
     forcing: Optional[str] = None  # None (Model A) or "fsi" (Model B, future)
+    # Residual non-dimensionalisation: multiply raw residuals by these before
+    # squaring so continuity / momentum / scalar terms are O(1) and comparable
+    # (continuity_scale ~ L/U, momentum_scale ~ L/(rho U^2)). Defaults keep the
+    # residuals dimensional (=1.0).
+    continuity_scale: float = 1.0
+    momentum_scale: float = 1.0
+    scalar_scale: float = 1.0
 
     def __call__(
         self,
@@ -142,13 +149,15 @@ class CompositeLoss:
             cont, mom = navier_stokes_residual_nd(
                 vel, f["p"], X, self.rho, self.mu, forcing=forcing
             )
-            pde = cont.pow(2).mean() + sum(m.pow(2).mean() for m in mom)
+            pde = (cont * self.continuity_scale).pow(2).mean() + sum(
+                (m * self.momentum_scale).pow(2).mean() for m in mom
+            )
             out["pde"] = pde
             if model.predict_scalar:
                 sc = scalar_transport_residual(
                     f["c"], vel, X, self.diffusivity, self.scalar_source
                 )
-                out["scalar"] = sc.pow(2).mean()
+                out["scalar"] = (sc * self.scalar_scale).pow(2).mean()
             else:
                 out["scalar"] = zero
         else:

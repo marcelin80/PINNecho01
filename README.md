@@ -157,7 +157,8 @@ PINNecho01/
 │   ├── evaluate.py              # spec metrics: velocity/pressure/vorticity/Q/WSS/
 │   │                            #   residence-time + stagnation + spline baseline
 │   ├── data/
-│   │   ├── synthetic_lv.py      # synthetic IBAMR/IBFE-like LV FSI ground truth
+│   │   ├── synthetic_lv.py      # synthetic IBAMR/IBFE-like LV FSI ground truth (2D)
+│   │   ├── synthetic_lv_3d.py   # 3D volume-preserving ellipsoid ground truth
 │   │   ├── doppler.py           # single-component sparse Doppler sampling
 │   │   ├── dataset.py           # measurement + collocation + wall point sets
 │   │   ├── load_ibfe_output.py  # [TODO STUB] real IBFE loader (documented shapes)
@@ -178,11 +179,14 @@ PINNecho01/
 │   │   ├── losses.py            # Stage-1 demo losses
 │   │   ├── trainer.py           # Stage-1 demo Adam/L-BFGS loop
 │   │   ├── composite_loss.py    # spec 6-term loss + PDE-weight annealing
-│   │   └── train.py             # spec training entry (Model A loop; Model B gated)
+│   │   ├── train.py             # spec training entry + A/B compare + visualize
+│   │   ├── train3d.py           # 3D end-to-end toy validation driver
+│   │   └── observability.py     # windows/SNR/sparsity sweep harness
 │   ├── eval/
 │   │   ├── metrics.py           # velocity / pressure / vorticity / WSS errors
 │   │   ├── residence_time.py    # Lagrangian blood residence time
-│   │   └── plots.py             # field / loss / comparison figures
+│   │   ├── plots.py             # field / loss / comparison figures
+│   │   └── visualize.py         # A/B truth panels + cardiac-cycle animation
 │   └── utils/                   # seeding, logging
 ├── scripts/                     # thin CLI wrappers (run without install)
 ├── tests/                       # pytest suite (fast, small-scale)
@@ -350,15 +354,92 @@ python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 
 python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300 --traction # + traction continuity
 ```
 
+---
+
+## Visualization, observability sweep, and 3D
+
+Three tooling/validation additions make the results tangible and probe the
+remaining bottleneck.
+
+### A-vs-B visualization
+
+`scripts/visualize_ab.py` (console script `pinnecho-visualize`) trains both
+backbones from the same initialisation, saves checkpoints, and renders:
+
+* **truth / Model-A / Model-B field panels** for speed, vorticity and pressure
+  (shared per-column colour scales), and
+* **cardiac-cycle animations** (GIF) of speed and vorticity.
+
+```bash
+python scripts/visualize_ab.py --dtype float32 --steps 1800 --lbfgs-iters 200 \
+    --traction --out docs/results/ab_viz
+```
+
+![A-vs-B field comparison](docs/results/ab_viz/fields_t0.30.png)
+
+The panel makes the ablation legible at a glance: Model B recovers the vertical
+**pressure gradient** and the interior **vorticity** structure that the kinematic
+baseline washes out (baseline pressure is nearly flat; corr 0.24 → 0.98 in this
+run). Artifacts: [`docs/results/ab_viz/`](docs/results/ab_viz) —
+`fields_t0.30.png`, `fields_t0.60.png`, `metric_bars.png`,
+`cycle_speed.gif`, `cycle_vorticity.gif`, and the two `model_*.pt` checkpoints.
+Checkpoints load with `PINNNet.from_checkpoint(path)`.
+
+### Observability sweep
+
+`scripts/observability_sweep.py` (console script `pinnecho-sweep`) trains a
+backbone under a grid of acquisition conditions — number of acoustic **windows**,
+measurement **SNR**, and **sparsity** (points/frame) — and reports held-out
+reconstruction error, quantifying the single-component observability bottleneck.
+
+```bash
+python scripts/observability_sweep.py --dtype float32 --steps 1800 --seeds 0 1 \
+    --out docs/results/observability
+```
+
+It writes `sweep.json` and per-metric bar charts (`sweep_vel_relL2_speed.png`,
+`sweep_vel_relL2_v.png`, `sweep_wss_relL2.png`) under
+[`docs/results/observability/`](docs/results/observability). The dominant lever
+is the number of windows (a second, angled window most improves the cross-beam
+`v` component); noise and sparsity have a smaller effect in this regime, and
+velocity error is ultimately floor-limited by the short CPU training budget used
+for the sweep rather than by the acquisition alone.
+
+### 3D end-to-end validation
+
+`data/synthetic_lv_3d.py` extends the manufactured ground truth to a
+**volume-preserving ellipsoid** (`rx·ry·rz = const`), with the same construction
+principle as 2D: an affine wall-following field plus a divergence-free interior
+vortex `u_vortex = grad(env) × a(t)` (with `env = (1−rho²)²`) that vanishes with
+its gradient at the wall, so no-slip is exact. Properties asserted in
+`tests/test_synthetic_lv_3d.py`:
+
+* `max |div u|` ≈ 1e-15 (divergence-free), volume constant to 1e-14,
+* `max |u_vortex|` at the wall ≈ 1e-12 (exact no-slip),
+* 3D momentum residual with the correct `f` ≈ 0 (NS-exact).
+
+`scripts/train_model_3d.py` (console script `pinnecho-train-3d`) runs the spec
+network (`spatial_dim=3`) + composite loss end-to-end on three-window 3D Doppler:
+
+```bash
+python scripts/train_model_3d.py --dtype float32 --backbone fsi_informed --steps 1800
+```
+
+This validates that the whole pipeline (dimension-general residuals, network,
+loss, trainer) works in 3D: the loss decreases and every field is finite. Full
+3D reconstruction *accuracy* is observability- and budget-limited (three beams,
+small CPU network) — a short run reaches ~0.8 velocity relL2 — and is a target
+for a larger-budget / richer-acquisition run.
+
 ### Deferred to real data / future work
 
 * **Residence-time (scalar) reconstruction** needs a true inflow boundary
   (mitral valve) to reinitialise `c = 0`; the closed, area-preserving synthetic
   cavity has no real inflow, so this is gated on the real IBFE valve data (the
   scalar-transport residual and the `c` head are implemented and unit-tested).
-* **3D** — the residual/operator/network layers are already dimension-general
-  (2D & 3D forward and residuals are unit-tested); a 3D run needs a 3D synthetic
-  (or real IBFE) ground truth.
+* **Higher-fidelity 3D** — the 3D path is validated end-to-end (above); reaching
+  clinical-grade 3D accuracy needs a larger training budget, richer multi-window
+  acquisition, and ultimately a real IBFE 3D ground truth.
 
 ---
 
@@ -369,10 +450,17 @@ CPU-only is fine (the defaults are tuned to run on a laptop):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU wheel
-pip install -e .            # installs pinnecho + console scripts
+pip install -e ".[dev,viz]"  # pinnecho + console scripts + pytest + GIF writer
 # or, without installing:
 pip install -r requirements.txt
 ```
+
+Console scripts installed with the package: `pinnecho-train-a`,
+`pinnecho-compare-ab`, `pinnecho-visualize`, `pinnecho-sweep`,
+`pinnecho-train-3d` (spec-aligned toy drivers), alongside the earlier
+`pinnecho-generate/train/evaluate/compare`. Continuous integration
+(`.github/workflows/ci.yml`) runs the full `pytest` suite on Python 3.10 and
+3.11.
 
 ---
 

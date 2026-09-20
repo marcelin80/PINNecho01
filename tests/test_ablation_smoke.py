@@ -13,9 +13,11 @@ from pinnecho.train.ablation import (
     run_traction_perturbation,
     run_pressure_observability,
     run_observability_physics,
+    run_forcing_perturbation,
     forcing_pressure_coupling,
     _apply_windows,
     _pearson,
+    _paired_stats,
     _aggregate,
     _fmt_table,
 )
@@ -77,6 +79,25 @@ def test_forcing_pressure_coupling():
     # aligned with the pressure gradient (circularity is real and measurable).
     assert c["corr_forcing_gradp"] > c["corr_inertialviscous_gradp"]
     assert 0.0 <= c["gradp_magnitude_fraction"] <= 5.0
+    # Vorticity leak keys present; the lap u = -curl(omega) identity should hold
+    # to good accuracy (autograd second derivatives of the analytic field).
+    assert "corr_pressurefree_muCurlOmega" in c
+    assert c["identity_visc_curl_relerr"] < 1e-3
+
+
+def test_paired_stats():
+    st = _paired_stats([0.8, 0.79, 0.81], [0.76, 0.56, 0.60], higher_better=True)
+    assert st["n"] == 3 and st["n_wins"] == 3
+    assert st["mean_diff"] > 0
+
+
+def test_forcing_perturbation_tiny():
+    torch.set_default_dtype(torch.float32)
+    cfg = Config()
+    res = run_forcing_perturbation(cfg, seeds=(0,), levels=(0.0, 0.3),
+                                   steps=25, lbfgs_iters=0, verbose=False)
+    assert "eps=0.00" in res["levels"] and "eps=0.30" in res["levels"]
+    assert "vorticity_corr" in res["paired"] and "wss_corr" in res["paired"]
 
 
 def test_pressure_observability_tiny():

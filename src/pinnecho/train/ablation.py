@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -95,6 +95,7 @@ class Variant:
     wall_target: str         # "kinematic" | "fsi"
     use_traction: bool = False
     traction_key: str = "wall_traction"
+    forcing_key: Optional[str] = None
     note: str = ""
 
 
@@ -136,6 +137,7 @@ def _run_variant(config, dataset, variant: Variant, *, steps: int,
     build_batches = make_toy_batch_builder(
         dataset, seed=seed, with_traction=variant.use_traction,
         wall_target=variant.wall_target, traction_key=variant.traction_key,
+        forcing_key=variant.forcing_key,
     )
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 4), seed=seed)
@@ -258,37 +260,71 @@ def _pearson(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 def forcing_pressure_coupling(config, seed: int = 0, n: int = 4000) -> Dict[str, float]:
-    """Quantify how much the synthetic FSI forcing *is* the pressure gradient.
+    """Quantify what the synthetic FSI forcing "leaks" -- pressure AND vorticity.
 
-    The manufactured forcing is ``f = rho Du/Dt + grad p - mu lap u``. Splitting
-    off the pressure-free inertial/viscous part ``g = f - grad p`` lets us measure
-    the alignment of ``f`` with ``grad p`` (the circularity), the alignment of the
-    residual ``g`` with ``grad p`` (what is left once the explicit gradient is
-    removed), and the magnitude share ``||grad p|| / ||f||``.
+    The manufactured forcing is the *full* momentum residual
+    ``f = rho Du/Dt + grad p - mu lap u``. It therefore explicitly contains:
 
-    This is the **gate for any Model-B redesign**: a genuinely pressure-independent
-    forcing must drive ``corr(f, grad p)`` and the gradient fraction down. NOTE the
-    theoretical ceiling: for an *exact* incompressible manufactured solution the
-    irrotational part of ``f`` equals ``grad p`` by the momentum equation, so this
-    coupling cannot be removed while keeping a nontrivial recoverable pressure --
-    it can only be reduced by making the forcing more solenoidal / localised.
+    * the **pressure gradient** ``grad p`` (the pressure leak, Check 0), and
+    * the **viscous term** ``-mu lap u``, which for an incompressible field equals
+      ``mu curl(omega)`` (identity ``lap u = -curl(omega)``). So the forcing also
+      carries the curl of vorticity -- a first-derivative-of-vorticity field that
+      directly informs vorticity and wall shear stress.
+
+    We decompose ``f`` into gradient / viscous(=vorticity-curl) / inertial parts
+    and report, for each, the alignment (Pearson) with ``f`` and the magnitude
+    share. The pressure-free residual ``g = f - grad p`` isolates the
+    viscous+inertial content; ``corr(g, mu curl omega)`` is the vorticity analogue
+    of Check 0's pressure gate.
+
+    This is the **redesign gate**: a pressure-independent forcing must lower
+    ``corr(f, grad p)``, but per the Helmholtz argument that pushes weight onto the
+    solenoidal part -- which is exactly ``mu curl omega`` -- so the redesign must
+    ALSO keep ``corr(f, mu curl omega)`` in check or it merely swaps a pressure
+    circularity for a vorticity one. Hence two gates, not one.
     """
     from ..data.synthetic_lv import SyntheticLVFSI
     from ..physics import operators as ops
 
     dtype = torch.get_default_dtype()
     lv = SyntheticLVFSI(config.geometry, config.flow, dtype=dtype)
+    mu = float(config.flow.viscosity)
     rng = np.random.default_rng(seed)
     t_values = np.linspace(0.0, config.flow.period, 24)
     X = lv.sample_interior(n, t_values, rng).to(dtype).requires_grad_(True)
-    gradp = ops.grad(lv.pressure(X), X)[:, :2].detach()
-    f = lv.forcing(X).detach()
+
+    uv = lv._velocity_from_graph(X)
+    u, v = uv[:, 0:1], uv[:, 1:2]
+    gradp = ops.grad(lv.pressure(X), X)[:, :2]
+    # Viscous term of the forcing, -mu lap u, and its identity form mu curl(omega).
+    visc = -mu * torch.cat([ops.laplacian(u, X), ops.laplacian(v, X)], dim=1)
+    omega = ops.curl_z(u, v, X)
+    gomega = ops.grad(omega, X)
+    mu_curl_omega = mu * torch.cat([gomega[:, 1:2], -gomega[:, 0:1]], dim=1)
+    f = lv.forcing(X)
+    inertial = f - gradp - visc  # = rho Du/Dt
+
+    f = f.detach(); gradp = gradp.detach(); visc = visc.detach()
+    mu_curl_omega = mu_curl_omega.detach(); inertial = inertial.detach()
     g = f - gradp
+    nf = f.norm().clamp_min(1e-12)
+    ng = g.norm().clamp_min(1e-12)
     return {
+        # --- pressure leak (Check 0, original) ---
         "corr_forcing_gradp": _pearson(f.reshape(-1), gradp.reshape(-1)),
         "corr_inertialviscous_gradp": _pearson(g.reshape(-1), gradp.reshape(-1)),
-        "gradp_magnitude_fraction": float(
-            (gradp.norm() / f.norm().clamp_min(1e-12))),
+        "gradp_magnitude_fraction": float(gradp.norm() / nf),
+        # --- vorticity-curl leak (the new gate) ---
+        "corr_forcing_muCurlOmega": _pearson(f.reshape(-1), mu_curl_omega.reshape(-1)),
+        "corr_pressurefree_muCurlOmega": _pearson(g.reshape(-1), mu_curl_omega.reshape(-1)),
+        "muCurlOmega_magnitude_fraction_f": float(mu_curl_omega.norm() / nf),
+        "muCurlOmega_magnitude_fraction_g": float(mu_curl_omega.norm() / ng),
+        # --- inertial (advective) part, the remaining leak ---
+        "corr_forcing_inertial": _pearson(f.reshape(-1), inertial.reshape(-1)),
+        "inertial_magnitude_fraction": float(inertial.norm() / nf),
+        # --- identity sanity: -mu lap u ?= mu curl(omega) ---
+        "identity_visc_curl_relerr": float(
+            (visc - mu_curl_omega).norm() / mu_curl_omega.norm().clamp_min(1e-12)),
         "forcing_rms": float(f.pow(2).mean().sqrt()),
         "gradp_rms": float(gradp.pow(2).mean().sqrt()),
     }
@@ -373,6 +409,96 @@ def run_observability_physics(config, *, seeds: Sequence[int] = (0, 1, 2),
     return {k: _aggregate(v) for k, v in per_variant.items()}
 
 
+def _paired_stats(a: Sequence[float], b: Sequence[float],
+                  higher_better: bool = True) -> Dict[str, float]:
+    """Per-seed paired comparison of ``a`` vs ``b`` (paired by index/seed).
+
+    Returns the mean/std of the difference ``a - b``, a paired t-statistic
+    ``mean / (std / sqrt(n))``, the count of pairs where ``a`` wins, and ``n``.
+    No SciPy dependency: we report ``t`` and ``n`` so significance can be judged
+    against a t-table (e.g. |t|>4.30 for a two-sided 0.05 test at dof=2).
+    """
+    x = np.asarray(a, dtype=float)
+    y = np.asarray(b, dtype=float)
+    n = int(min(x.size, y.size))
+    x, y = x[:n], y[:n]
+    diff = x - y
+    mean = float(diff.mean()) if n else float("nan")
+    std = float(diff.std(ddof=1)) if n > 1 else 0.0
+    t = float(mean / (std / np.sqrt(n))) if (n > 1 and std > 1e-12) else float("nan")
+    wins = int((diff > 0).sum()) if higher_better else int((diff < 0).sum())
+    return {"mean_diff": mean, "std_diff": std, "t_stat": t,
+            "n_wins": float(wins), "n": float(n)}
+
+
+def run_forcing_perturbation(config, *, seeds: Sequence[int] = (0, 1, 2),
+                             levels: Sequence[float] = (0.0, 0.10, 0.20, 0.30),
+                             steps: int = 2500, lbfgs_iters: int = 200,
+                             lr: float = 2e-3, verbose: bool = True,
+                             ) -> Dict[str, object]:
+    """Stress-test the *forcing* (vorticity/WSS analogue of Ablation 2).
+
+    Ablation 4 used the **exact** forcing, so its gradient-quantity advantage is
+    an idealised ceiling -- a real FSI solver only *estimates* the active-
+    contraction forcing. Here we perturb the single-window ``fsi_forcing``
+    (exact wall, no traction) collocation forcing by relative ``level`` and watch
+    the vorticity/WSS correlation degrade. We also train the two-window baseline
+    reference so we can report the **paired** ``w1_forcing(exact) - w2_baseline``
+    difference for vorticity/WSS with per-seed statistics.
+
+    Returns ``{"levels": {..}, "w2_baseline": {..}, "paired": {..}, "raw": {..}}``.
+    """
+    cfg1 = _apply_windows(config, 1)
+    cfg2 = _apply_windows(config, 2)
+    per_level: Dict[str, List[Dict[str, float]]] = {}
+    base_rows: List[Dict[str, float]] = []
+    raw: Dict[str, List[float]] = {}
+
+    for seed in seeds:
+        ds1, lv1 = build_toy_dataset(cfg1, seed=seed)
+        ds1.extras["_lv"] = lv1
+        f_true = ds1.col_forcing
+        for eps in levels:
+            key = f"eps={eps:.2f}"
+            fk = "col_forcing" if eps <= 0 else f"col_forcing_p{int(eps*100)}"
+            if eps > 0 and fk not in ds1.extras:
+                ds1.extras[fk] = perturb_traction(f_true, eps, seed=seed)
+            v = Variant(f"forcing_{key}", "fsi_informed", "fsi",
+                        use_traction=False,
+                        forcing_key=(None if eps <= 0 else fk),
+                        note=f"1 window, forcing perturbed by {eps:.0%}")
+            if verbose:
+                print(f"\n=== [seed {seed}] {v.name}: {v.note} ===")
+            m = _run_variant(cfg1, ds1, v, steps=steps, lbfgs_iters=lbfgs_iters,
+                             lr=lr, seed=seed, verbose=verbose)
+            per_level.setdefault(key, []).append(m)
+
+        ds2, lv2 = build_toy_dataset(cfg2, seed=seed)
+        ds2.extras["_lv"] = lv2
+        vb = Variant("w2_baseline", "baseline", "fsi", note="2 windows, no FSI")
+        if verbose:
+            print(f"\n=== [seed {seed}] {vb.name}: {vb.note} ===")
+        base_rows.append(_run_variant(cfg2, ds2, vb, steps=steps,
+                                      lbfgs_iters=lbfgs_iters, lr=lr, seed=seed,
+                                      verbose=verbose))
+
+    # Paired stats: exact-forcing single window vs two-window baseline.
+    exact_rows = per_level[f"eps={0.0:.2f}"]
+    paired = {}
+    for metric in ("vorticity_corr", "wss_corr"):
+        raw[f"w1_forcing_{metric}"] = [r[metric] for r in exact_rows]
+        raw[f"w2_baseline_{metric}"] = [r[metric] for r in base_rows]
+        paired[metric] = _paired_stats(
+            [r[metric] for r in exact_rows], [r[metric] for r in base_rows],
+            higher_better=True)
+    return {
+        "levels": {k: _aggregate(v) for k, v in per_level.items()},
+        "w2_baseline": _aggregate(base_rows),
+        "paired": paired,
+        "raw": raw,
+    }
+
+
 def _fmt_table(results: Dict[str, Dict[str, Tuple[float, float]]],
                metrics: Sequence[str] = KEY_METRICS) -> str:
     """Pretty ``mean+/-std`` table (rows = variants, cols = metrics)."""
@@ -404,7 +530,7 @@ def main() -> None:  # pragma: no cover - CLI wiring
     parser.add_argument(
         "--which",
         choices=["isolation", "perturbation", "coupling", "pressure-obs",
-                 "substitution", "both", "all"],
+                 "substitution", "forcing-perturbation", "both", "all"],
         default="both",
         help="which experiment(s) to run ('both'=isolation+perturbation, "
              "'all'=every experiment)")
@@ -490,6 +616,28 @@ def main() -> None:  # pragma: no cover - CLI wiring
         print(_fmt_table(sub))
         payload["substitution"] = {k: {m: list(v) for m, v in r.items()}
                                    for k, r in sub.items()}
+
+    if want("forcing-perturbation"):
+        fp = run_forcing_perturbation(
+            config, seeds=args.seeds, steps=args.steps,
+            lbfgs_iters=args.lbfgs_iters, lr=args.lr)
+        print("\n################ ABLATION 5: forcing-uncertainty stress test + "
+              "paired stats (vorticity/WSS) ################")
+        tbl = dict(fp["levels"])
+        tbl["w2_baseline (ref)"] = fp["w2_baseline"]
+        print(_fmt_table(tbl))
+        print("\n  paired: w1_forcing(exact) - w2_baseline (higher corr = forcing wins)")
+        for metric, st in fp["paired"].items():
+            print(f"    {metric:16s} mean_diff={st['mean_diff']:+.4f} "
+                  f"std={st['std_diff']:.4f} t={st['t_stat']:+.3f} "
+                  f"wins={int(st['n_wins'])}/{int(st['n'])}")
+        payload["forcing_perturbation"] = {
+            "levels": {k: {m: list(v) for m, v in r.items()}
+                       for k, r in fp["levels"].items()},
+            "w2_baseline": {m: list(v) for m, v in fp["w2_baseline"].items()},
+            "paired": fp["paired"],
+            "raw": fp["raw"],
+        }
 
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)

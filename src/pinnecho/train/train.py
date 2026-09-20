@@ -223,7 +223,8 @@ def make_toy_batch_builder(dataset, seed: int = 0,
                            n_data: int = 2048, n_col: int = 2048,
                            n_wall: int = 512, with_traction: bool = False,
                            wall_target: str = "fsi",
-                           traction_key: str = "wall_traction"):
+                           traction_key: str = "wall_traction",
+                           forcing_key: Optional[str] = None):
     """Return a ``build_batches(step)`` closure that subsamples the fixed sets.
 
     ``wall_target`` selects the wall-velocity BC target: ``"kinematic"`` (the
@@ -235,12 +236,19 @@ def make_toy_batch_builder(dataset, seed: int = 0,
     traction-continuity target. Defaults to the exact ``"wall_traction"``; the
     ablation driver stores perturbed copies under other keys to run the
     traction-uncertainty stress test without touching the exact target.
+
+    ``forcing_key`` optionally selects a ``dataset.extras`` entry to use as the
+    collocation FSI forcing target instead of the exact ``dataset.col_forcing``.
+    Used by the forcing-uncertainty stress test to feed perturbed forcing.
     """
     g = torch.Generator().manual_seed(seed)
     if wall_target == "kinematic":
         u_wall_all = dataset.extras.get("wall_velocity_kin", dataset.wall_velocity)
     else:
         u_wall_all = dataset.extras.get("wall_velocity_fsi", dataset.wall_velocity)
+    forcing_all = dataset.col_forcing
+    if forcing_key is not None and forcing_key in dataset.extras:
+        forcing_all = dataset.extras[forcing_key]
 
     def _idx(n_total, n):
         if n >= n_total:
@@ -259,7 +267,7 @@ def make_toy_batch_builder(dataset, seed: int = 0,
             },
             "collocation": {
                 "X": dataset.col_X[ci].clone(),
-                "forcing": dataset.col_forcing[ci],
+                "forcing": forcing_all[ci],
             },
             "wall": {
                 "X": dataset.wall_X[wi].clone(),

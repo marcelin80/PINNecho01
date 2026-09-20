@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **68 passing** (`pytest`)
+> 테스트: **69 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -16,10 +16,12 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 - **핵심 과학 질문(원안)**: FSI 정보로 **압력·구배량** 복원이 개선되는가? → **압력에 관한 한
   주장 기각.** 대조 실험 결과 압력 이득은 경계 압력 주입(순환, `corr(f,∇p)=0.95`) + 관측 부족의
   하류 증상임이 확인됨.
-- **재정의된 질문(더 견고)**: **관측성 vs 물리 사전지식 — 서로 다른 병목.** 다중 음향창은
-  속도장/교차빔 관측을, FSI 물리는 구배량(와도·WSS)을 개선하며, 단일창+FSI가 2창 baseline의
-  구배 성능을 상회함(대체 가능성은 물리량 의존적). 전체 분석·수치·재설계 권고:
-  [`docs/ABLATIONS.md`](ABLATIONS.md).
+- **구배량 대체 주장도 기각**: forcing 셔플 진단(Ablation 6, 5시드) 결과, 구배 이득은 일반적
+  물리 정칙화가 아니라 **궤적-특이 정보(비선형 누출)**이며, 공정한 동일-창 비교에선 WSS 우위도
+  유의하지 않음. manufactured 설정에선 forcing 기반 이득(압력·구배 모두)이 본질적으로 궤적
+  정보를 담는다.
+- **순환성과 독립적으로 남는 견고한 결과**: **관측성(다중 음향창)** — 다중창이 속도/교차빔
+  관측을 개선(단, WSS는 오히려 낮출 수 있음). 전체 분석·수치·권고: [`docs/ABLATIONS.md`](ABLATIONS.md).
 - **Stage 1 범위**: 실제 환자·에코 데이터 없음. IBAMR/IBFE 파이프라인 출력을 모사한
   **해석적·자기일관(divergence-free, exact no-slip, NS-exact) 합성 지상진값** 위에서 검증.
 
@@ -107,12 +109,15 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
   아니라 단일창 관측 부족 탓.
 - **Ablation 4 (관측 vs 물리 대체, 비순환)**: 속도/교차빔은 2번째 창이 압도(대체 불가)하나,
   구배량은 `w1_forcing`이 `w2_baseline`을 상회.
-- **Ablation 5 (forcing 섭동 + paired 통계)**: 구배 이득은 forcing 30% 섭동에도 강건.
-  paired 검정에서 **WSS는 유의**(t=5.09, 3/3, Δ+0.098), **vorticity는 경향**(t=1.53). 최종
-  주장은 "WSS에 한해 유의한 물리-창 대체"로 정정.
+- **Ablation 5 (forcing 섭동, 3시드)**: 구배 이득이 30% 섭동에 강건해 보였으나, 기준선이 2창
+  baseline이고 n=3이라 취약 → Ablation 6에서 교정됨.
+- **Ablation 6 (forcing 셔플 진단, 5시드)**: 궤적-무관(순열) forcing은 이득을 못 지키고 오히려
+  해침(`shuffled−baseline` WSS/vorticity 모두 1/5). `exact>shuffled` → **구배 이득은 궤적-특이
+  비선형 누출**. 공정 동일-창 비교에서 WSS forcing 순효과 **무의미**(t=0.70). Ablation 5의
+  "유의"는 2창-baseline 교란(2창이 WSS를 오히려 악화)이었음.
 - 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료
-  `docs/results/ablations_all.json`(Check0+1~4) · `docs/results/ablation5.json`(Ablation 5) ·
-  `docs/results/ablations.json`(초기 2종).
+  `docs/results/ablations_all.json`(Check0+1~4) · `docs/results/ablation5.json` ·
+  `docs/results/ablation6.json` · `docs/results/ablations.json`(초기 2종).
 - (참고) 초기 단일시드 비교 원자료: `docs/results/stage2_forcing.json`,
   `docs/results/stage2_traction.json`.
 
@@ -163,7 +168,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (68 passing)
+## 6. 테스트 현황 (69 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -209,19 +214,19 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
    스칼라 잔차·`c` 헤드·유입 재초기화·`with_valve` 유입 점군은 완비.
 3. **고해상도 3D** — 더 큰 학습 예산 + 다중 윈도우 취득 + 실 3D 지상진값.
 
-## 9. 다음 단계 제안 (대조 실험 반영, 우선순위 순)
+## 9. 다음 단계 제안 (Ablation 6 반영, 우선순위 순)
 
-1. **Model B 물리 기여 재설계** — traction으로 `p`를 주입하는 대신, **압력과 독립적으로
-   유도되는 능동수축 파라미터 기반 체적력**으로 FSI 기여를 재정의. **검증 첫 게이트는
-   `pinnecho.train.ablation --which coupling`** (`corr(f,∇p)`가 낮아야 함). 단, Check 0의
-   이론적 한계(exact 해에서 비회전 forcing=∇p) 때문에 forcing을 더 solenoidal/국소적으로
-   만드는 방향으로만 가능. 손실 항·어댑터·ablation 하네스 재사용.
-2. **실제로 푼 FSI 지상진값 확보** — manufactured solution 대신 실제 IBAMR/IBFE 출력(traction이
-   추정량)으로 넘어가 순환성을 원천 제거. **단 IBAMR 실행 환경(접근/컴퓨팅) 미확보** →
-   당분간 1번(파라메트릭 forcing) 경로 우선. 확보 시 프레임 1주기를 NPZ/매니페스트로 내보내
-   `validate_ibfe_frames`로 계약 확인 → `train_ibfe`로 A/B 실행.
-3. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 에코 윤곽추적 오차로 보정하고,
-   `A_exact`를 공정 기준선으로 병기.
-4. **관측성 논점 우선 활용** — §4.2(다중 윈도우 병목)는 순환성과 무관하게 견고하므로
-   독립적 방법론 결과로 먼저 정리 가능.
+1. **관측성 논점을 독립 결과로 먼저 정리** — Ablation 3 + 초기 §4.2(다중 윈도우 병목)는
+   순환성과 완전히 무관하게 견고하다. 다중창이 속도/교차빔은 개선하나 WSS는 오히려 낮출 수
+   있다는 뉘앙스(Ablation 6)도 포함해 방법론 결과로 확정.
+2. **재설계는 근본 제약을 안고 진행** — 파라메트릭 능동수축 forcing도 *그 궤적을 재현하는 한*
+   Ablation 6가 보인 궤적-특이 누출을 피하기 어렵다. 따라서 재설계 검증은 상관 게이트
+   (`--which coupling`)뿐 아니라 **셔플 진단(`--which forcing-shuffle`)까지 통과**해야 하며,
+   근본적으로는 **독립 추정된 실제 FSI forcing**이 있어야 "물리 사전지식"과 "정답 주입"이
+   분리된다.
+3. **실제로 푼 FSI 지상진값 확보(핵심 관문)** — manufactured 순환성을 원천 제거하는 유일한 길.
+   **단 IBAMR 실행 환경(접근/컴퓨팅) 미확보.** 확보 시 프레임 1주기를 NPZ/매니페스트로 내보내
+   `validate_ibfe_frames` → `train_ibfe`로 A/B + 셔플 진단.
+4. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 speckle-tracking reproducibility
+   문헌값으로 보정, `A_exact`를 공정 기준선으로 병기.
 5. 밸브 데이터가 있으면 `predict_scalar=True`로 잔류시간 복원, 3D는 예산·다중 윈도우 상향.

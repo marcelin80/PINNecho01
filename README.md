@@ -316,34 +316,39 @@ is better, **↑** = higher is better):
 >     --steps 2500 --lbfgs-iters 200 --dtype float32 --out artifacts/ablations.json
 > ```
 
-**The more robust question that replaces it — observability vs. physics.** Two
-further ablations reframe the result into something non-circular and clinically
-meaningful (full analysis in [`docs/ABLATIONS.md`](docs/ABLATIONS.md)):
+**What actually survives — observability, not the physics claim.** Follow-up
+ablations (full analysis in [`docs/ABLATIONS.md`](docs/ABLATIONS.md)) sort the
+findings into one robust result and one retracted claim:
 
 * **Pressure is downstream of observability, not the missing physics term.** With
   the baseline (no FSI) and an exact wall, going from 1→3 acoustic windows
   improves the cross-beam velocity `u` (relL2 0.96→0.67) *and* pressure
   correlation (−0.04→0.30) together (coupling −0.67). The `A_exact` pressure
   failure is inherited from the unobserved cross-beam velocity.
-* **FSI physics and extra windows fix *different* bottlenecks.** A second acoustic
-  window dominates for the velocity field (forcing cannot substitute), but for the
-  **gradient** quantities a single window **+ FSI forcing beats two windows without
-  it**. This gradient advantage is *not* a vorticity analogue of the pressure
-  circularity: the viscous term `−μ∇²u = μ∇×ω` is only **0.23 %** of the forcing
-  magnitude (cardiac flow is inertia-dominated), so `corr(f, μ∇×ω) ≈ 0` — the
-  forcing does not inject vorticity. A **forcing-uncertainty stress test** (up to
-  30 % perturbation) leaves the gradient advantage intact, and per-seed **paired
-  stats** make it statistically significant for **WSS** (Δcorr +0.098, t = 5.09,
-  3/3 seeds) though only a **trend** for vorticity (t = 1.53). Defensible framing:
-  *FSI priors don't replace an acoustic window in general, but for wall shear
-  stress they significantly do (non-circular, robust to forcing error); the two
-  approaches are complementary.*
+* **A second acoustic window** dominates for the velocity field (forcing cannot
+  substitute) — this observability result is circularity-independent and robust.
+* **The gradient (vorticity/WSS) advantage does *not* survive scrutiny.** A
+  **forcing-shuffle diagnostic** (replace the collocation forcing with a random
+  permutation of itself — same distribution, wrong trajectory) shows the advantage
+  is **not** generic physics regularisation: the shuffled forcing *hurts* vs.
+  baseline and `forcing_exact > forcing_shuffled` (5 seeds), so the benefit carries
+  **trajectory-specific information** — a nonlinear leak the correlation gates
+  (`corr(f,∇p)`, `corr(f,μ∇×ω)≈0`) could not see, because the dominant term
+  `ρDu/Dt` is a nonlinear function of the true `u`. Moreover, on a *fair
+  same-window* baseline the WSS forcing benefit is **not** significant (t = 0.70,
+  5 seeds); the earlier apparent WSS win was a confound (the 2-window baseline is
+  itself *worse* at WSS). **So in this manufactured setup, forcing-based gains
+  (pressure *and* gradients) all carry an irreducible trajectory-information
+  component; only an independently-estimated real FSI forcing can separate
+  "physics prior" from "answer injection."** See [`docs/ABLATIONS.md`](docs/ABLATIONS.md)
+  Ablation 6.
 
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
 [`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json),
 control ablations [`docs/results/ablations_all.json`](docs/results/ablations_all.json)
 (Check 0 + Ablations 1–4), [`docs/results/ablation5.json`](docs/results/ablation5.json)
-(forcing stress test + paired stats), and [`docs/results/ablations.json`](docs/results/ablations.json).
+(forcing stress test), [`docs/results/ablation6.json`](docs/results/ablation6.json)
+(5-seed shuffle diagnostic), and [`docs/results/ablations.json`](docs/results/ablations.json).
 
 > The table above uses a *coincident* wall velocity for A and B, so it isolates
 > the effect of the momentum forcing alone. Stage 2 (below) makes the wall

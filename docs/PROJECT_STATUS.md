@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **58 passing** (`pytest`)
+> 테스트: **62 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -15,7 +15,10 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 - **출력**: 전체 속도장, 압력, 와도, 벽 전단응력(WSS), (실데이터 확보 시) 잔류시간.
 - **핵심 과학 질문**: Navier–Stokes 백본에 심장 **유체-구조 상호작용(FSI)** 정보를
   더하면, 운동학적 no-slip 기반 기존 방법(AI-VFM, iVFM-PINN, CSF-PINN) 대비
-  **속도 구배량(와도·WSS)과 압력** 복원이 개선되는가? → **개선됨 (아래 결과 참조).**
+  **속도 구배량(와도·WSS)과 압력** 복원이 개선되는가? → **현 합성 설정에서는 미확정.**
+  대조 실험 결과, 압력 이득은 경계 주입에 따른 (거의 순환적인) 산물이고, 구배량 이득의
+  상당 부분은 baseline의 인위적 노이즈에서 비롯됨이 확인됨. 자세한 내용과 재설계 권고는
+  [`docs/ABLATIONS.md`](ABLATIONS.md) 참조.
 - **Stage 1 범위**: 실제 환자·에코 데이터 없음. IBAMR/IBFE 파이프라인 출력을 모사한
   **해석적·자기일관(divergence-free, exact no-slip, NS-exact) 합성 지상진값** 위에서 검증.
 
@@ -69,21 +72,32 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ## 4. 핵심 결과
 
-### 4.1 Model A vs Model B (벽속도 분기, 동일 아키텍처/데이터/초기화)
+### 4.1 Model A vs Model B — 그리고 대조 실험으로 드러난 교란요인 ⚠️
 
-상대 L2 오차(↓), 괄호는 상관계수(↑):
+초기 비교(벽속도 분기, 동일 아키텍처/데이터/초기화)는 큰 압력 개선(상관 0.24 → 0.996)을
+보였으나, **이 결과는 그대로 논문 근거로 쓸 수 없다.** 두 교란요인이 있다:
 
-| 지표 | A | B (forcing+FSI 벽) | B (+traction) |
-|---|---|---|---|
-| speed | 0.481 | 0.454 | 0.452 |
-| vorticity | 0.585 (0.81) | 0.561 (0.83) | **0.549 (0.84)** |
-| **WSS** | 0.618 (0.61) | 0.489 (0.69) | **0.487 (0.68)** |
-| **pressure** | 0.971 (0.24) | 2.209 (0.79) | **0.105 (0.996)** |
+1. **순환성** — 합성 지상진값은 manufactured solution이라, Model B에 주는 traction
+   `−p·n + 점성항`이 **해석적 압력 `p`를 벽에서 직접 주입**하는 셈. 압력 복원은 거의 당연.
+2. **비대칭 경계정보** — 초기 비교에서 A는 노이즈 낀 벽, B는 정확한 벽을 받았다.
 
-- 현실적인 운동학적 벽 오차를 주면 **WSS 개선폭이 ~21%**로 확대(벽 구배량이라 정확한
-  FSI 벽속도의 이득이 큼).
-- **traction 연속성**을 켜면 압력이 거의 정확히 복원(상관 0.24 → 0.996).
-- 원자료: `docs/results/stage2_forcing.json`, `docs/results/stage2_traction.json`.
+**대조 실험(양쪽 정확 벽, 3시드 평균)으로 물리항 순수 효과를 격리한 결과:**
+
+| variant | pressure relL2 | pressure corr | vorticity corr | WSS corr |
+|---|---|---|---|---|
+| `A_exact` (정확 벽, forcing 없음) | 1.134 | −0.039 | 0.740 | 0.640 |
+| `B_forcing` (정확 벽 + forcing, traction 없음) | 3.900 | 0.641 | 0.782 | 0.659 |
+| `B_forcing_traction` (+ exact traction) | 0.171 | **0.986** | 0.776 | 0.655 |
+
+- **압력**: forcing 단독으로는 크기 복원 실패(relL2 3.9). corr 0.986은 **오직 traction 주입**으로
+  달성 → 초기 0.996은 "FSI 이득"이 아니라 경계 압력 주입 산물(≈순환적).
+- **와도·WSS**: forcing 순효과는 `A_exact` 대비 **+0.04 / +0.02**로 소폭(시드 산포 수준).
+  기존에 커 보인 WSS 개선폭은 대부분 **noisy vs exact 벽** 차이였다.
+- **traction 섭동 스트레스 테스트**: ε=20%에도 pressure corr 0.98 유지(스케일 불변 지표라
+  둔감), 크기 지표 relL2만 0.17→0.21(~24%) 악화.
+- 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료 `docs/results/ablations.json`.
+- (참고) 초기 단일시드 비교 원자료: `docs/results/stage2_forcing.json`,
+  `docs/results/stage2_traction.json`.
 
 ### 4.2 관측성 스윕 (Model B, 1800 Adam + 200 L-BFGS, float32)
 
@@ -132,7 +146,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (58 passing)
+## 6. 테스트 현황 (62 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -145,6 +159,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_ibfe_export.py` / `test_ibfe_pipeline.py` | IBFE 인터페이스 + I/O·검증·어댑터 |
 | `test_visualize_smoke.py` / `test_observability_smoke.py` | 시각화·스윕 배관 |
 | `test_train_model_a_smoke.py` / `test_train_3d_smoke.py` | Model A/B·3D 학습 스모크 |
+| `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
@@ -177,9 +192,16 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
    스칼라 잔차·`c` 헤드·유입 재초기화·`with_valve` 유입 점군은 완비.
 3. **고해상도 3D** — 더 큰 학습 예산 + 다중 윈도우 취득 + 실 3D 지상진값.
 
-## 9. 다음 단계 제안
+## 9. 다음 단계 제안 (대조 실험 반영, 우선순위 순)
 
-- 실 IBFE 프레임 1주기를 NPZ/매니페스트로 내보내 `validate_ibfe_frames`로 계약 확인.
-- 동일 frames로 `train_ibfe`를 baseline·fsi_informed 두 번 실행해 실데이터 A/B 확보.
-- 밸브 데이터가 있으면 `predict_scalar=True`로 잔류시간 복원 착수.
-- 3D는 예산 상향(더 큰 네트워크·스텝, GPU/float32)과 3+윈도우 취득으로 정확도 개선.
+1. **Model B 물리 기여 재설계** — traction으로 `p`를 주입하는 대신, **압력과 독립적으로
+   유도되는 능동수축 파라미터 기반 체적력**으로 FSI 기여를 재정의해 순환성 없이 우위를
+   재검증. 손실 항·어댑터·ablation 하네스는 그대로 재사용(`pinnecho.train.ablation`).
+2. **실제로 푼 FSI 지상진값 확보** — manufactured solution 대신 실제 IBAMR/IBFE 출력(traction이
+   추정량)으로 넘어가 순환성을 원천 제거. 프레임 1주기를 NPZ/매니페스트로 내보내
+   `validate_ibfe_frames`로 계약 확인 → 동일 frames로 `train_ibfe`를 A/B 실행.
+3. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 에코 윤곽추적 오차로 보정하고,
+   `A_exact`를 공정 기준선으로 병기.
+4. **관측성 논점 우선 활용** — §4.2(다중 윈도우 병목)는 순환성과 무관하게 견고하므로
+   독립적 방법론 결과로 먼저 정리 가능.
+5. 밸브 데이터가 있으면 `predict_scalar=True`로 잔류시간 복원, 3D는 예산·다중 윈도우 상향.

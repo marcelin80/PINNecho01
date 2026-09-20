@@ -17,6 +17,7 @@ env/
 # Experiment outputs / data artifacts
 runs/
 outputs/
+artifacts/
 data/generated/
 data/ibfe_example/
 *.pt

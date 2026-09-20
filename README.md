@@ -281,24 +281,44 @@ is better, **↑** = higher is better):
 | **wall shear stress** ↓ (corr ↑) | 0.516 (0.67) | 0.489 (0.69) | **0.487 (0.68)** |
 | **pressure** ↓ (corr ↑) | 0.827 (0.67) | 2.209 (0.79) | **0.105 (0.996)** |
 
-**Reading the result.**
-* **FSI forcing alone** improves exactly the velocity-**gradient** quantities
-  this project targets (vorticity, WSS — the metrics CSF-PINN reported as weak)
-  *and* the pressure **correlation** (0.67 → 0.79), confirming the core
-  hypothesis. Its pressure **magnitude** degrades, though (relL2 0.83 → 2.21):
-  the large FSI forcing dominates the momentum balance, so imperfect velocity
-  recovery (the single-component observability limit, ~0.45 speed error for
-  both) is amplified into the pressure — while the baseline's `f = 0` yields a
-  more bounded (but structurally wronger) pressure.
-* **Adding the traction-continuity BC** resolves this: enforcing
-  `sigma_f . n = t_structure` at the wall pins the pressure gauge/magnitude, and
-  Model B then wins on **every** metric — most dramatically pressure
-  (relL2 **0.827 → 0.105**, corr **0.67 → 0.996**) — while keeping the gradient
-  improvements. This is the intended payoff of informing the PINN with the
-  structural model rather than position-matching alone.
+**Reading the result (and an important caveat).**
+* **FSI forcing alone** improves the velocity-**gradient** quantities this project
+  targets (vorticity, WSS) and the pressure **correlation**, but its pressure
+  **magnitude** degrades (relL2 0.83 → 2.21).
+* **Adding the traction-continuity BC** appears to resolve this, with Model B
+  winning on pressure (relL2 **0.827 → 0.105**, corr **0.67 → 0.996**).
+
+> [!WARNING]
+> **This headline pressure result does NOT yet support "FSI helps."** Two
+> confounds were identified and quantified in follow-up control ablations
+> ([`docs/ABLATIONS.md`](docs/ABLATIONS.md)):
+>
+> 1. **Circularity.** The synthetic ground truth is a *manufactured* solution, so
+>    the traction handed to Model B is `−p·n + viscous` built from the same
+>    analytic pressure. Feeding it as a BC injects the wall pressure almost
+>    verbatim, making near-perfect pressure recovery close to tautological.
+> 2. **Asymmetric boundary info.** In this table A used a *noisy* wall while
+>    B used the exact wall.
+>
+> With **matched exact walls** (3-seed control), pressure recovery is driven
+> *entirely by the traction constraint*, not the physics forcing: forcing-only
+> gives pressure corr 0.64 but relL2 **3.9** (unusable magnitude), while
+> corr 0.986 only appears once traction injects `p·n`. The vorticity/WSS gain
+> from the pure forcing term is small (~+0.02–0.04 correlation, within seed
+> scatter), and much of the originally-large WSS improvement was the removed
+> wall-tracking noise. See [`docs/ABLATIONS.md`](docs/ABLATIONS.md) for the full
+> tables, the traction-perturbation stress test, and the recommended redesign
+> (pressure-independent active-contraction forcing).
+>
+> Run it yourself:
+> ```bash
+> python -m pinnecho.train.ablation --which both --seeds 0 1 2 \
+>     --steps 2500 --lbfgs-iters 200 --dtype float32 --out artifacts/ablations.json
+> ```
 
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
-[`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json).
+[`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json),
+control ablations [`docs/results/ablations.json`](docs/results/ablations.json).
 
 > The table above uses a *coincident* wall velocity for A and B, so it isolates
 > the effect of the momentum forcing alone. Stage 2 (below) makes the wall
@@ -511,8 +531,8 @@ pip install -r requirements.txt
 
 Console scripts installed with the package: `pinnecho-train-a`,
 `pinnecho-compare-ab`, `pinnecho-visualize`, `pinnecho-sweep`,
-`pinnecho-train-3d` (spec-aligned toy drivers), alongside the earlier
-`pinnecho-generate/train/evaluate/compare`. Continuous integration
+`pinnecho-train-3d`, `pinnecho-ablation` (spec-aligned toy drivers), alongside
+the earlier `pinnecho-generate/train/evaluate/compare`. Continuous integration
 (`.github/workflows/ci.yml`) runs the full `pytest` suite on Python 3.10 and
 3.11.
 

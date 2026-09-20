@@ -27,6 +27,8 @@ from typing import List, Optional, Sequence
 
 import torch
 
+from ..physics import operators as ops
+
 
 def dirichlet_velocity_residual(
     velocity_pred: Sequence[torch.Tensor],
@@ -103,14 +105,38 @@ def fsi_wall_velocity_loss(
     Differs from :func:`wall_kinematic_loss` only in its *target*: the FSI
     solver's own interface velocity (from elastodynamics), not the pure
     kinematic ``d(contour)/dt``. Numerically identical form; kept separate so
-    the backbone difference is explicit and auditable.
-
-    NOT IMPLEMENTED: requires ``velocity_wall`` from ``load_ibfe_output``.
+    the backbone difference is explicit and auditable. In the Stage-1 synthetic
+    setting the two targets coincide (exact no-slip), so this isolates the effect
+    of the momentum forcing; with real IBFE data ``fsi_wall_velocity`` differs
+    subtly from the kinematic contour velocity.
     """
-    raise NotImplementedError(
-        "Model B FSI wall-velocity BC is a future stage. Do not enable until "
-        "Model A trains end-to-end on the toy 2D case (see project plan)."
-    )
+    res = dirichlet_velocity_residual(velocity_pred, fsi_wall_velocity)
+    return _relative_mse(res, fsi_wall_velocity) if relative else res.pow(2).mean()
+
+
+def fluid_traction_2d(
+    u: torch.Tensor,
+    v: torch.Tensor,
+    p: torch.Tensor,
+    coords: torch.Tensor,
+    normals: torch.Tensor,
+    mu: float,
+) -> torch.Tensor:
+    """Newtonian fluid Cauchy traction ``t = sigma . n`` at each point (N, 2).
+
+    ``sigma = -p I + mu (grad u + grad u^T)`` (2D). ``u, v, p`` must have been
+    produced from ``coords`` (a leaf tensor with ``requires_grad=True``) so the
+    velocity gradients can be taken by autograd. ``normals`` is ``(N, 2)``.
+    """
+    u_x, u_y = ops.d(u, coords, "x"), ops.d(u, coords, "y")
+    v_x, v_y = ops.d(v, coords, "x"), ops.d(v, coords, "y")
+    sigma_xx = -p + 2.0 * mu * u_x
+    sigma_yy = -p + 2.0 * mu * v_y
+    sigma_xy = mu * (u_y + v_x)
+    nx, ny = normals[:, 0:1], normals[:, 1:2]
+    t_x = sigma_xx * nx + sigma_xy * ny
+    t_y = sigma_xy * nx + sigma_yy * ny
+    return torch.cat([t_x, t_y], dim=1)
 
 
 def traction_continuity_loss(
@@ -120,20 +146,22 @@ def traction_continuity_loss(
     normals: torch.Tensor,
     structure_traction: torch.Tensor,
     mu: float,
+    relative: bool = True,
 ) -> torch.Tensor:
     """Model B, option (ii): soft traction-continuity penalty at the interface.
 
     Enforces fluid Cauchy traction ``t_f = sigma_f . n`` equal to the structural
-    traction from the FSI solve, where for a Newtonian fluid
-    ``sigma_f = -p I + mu (grad u + grad u^T)``. Regularises the network by
-    physical consistency with the structural model rather than position-matching
-    alone.
+    traction from the FSI solve. Regularises the network by physical consistency
+    with the structural model rather than position-matching alone.
 
-    NOT IMPLEMENTED: requires ``normals_wall`` and ``traction_wall`` from
-    ``load_ibfe_output`` and a viscous-stress assembly from autograd velocity
-    gradients. Do not start until Model A is validated (see project plan).
+    ``velocity_pred`` are components produced from ``coords`` (leaf tensor with
+    ``requires_grad=True``); ``structure_traction`` is ``(N, 2)`` from the FSI
+    interface. Currently 2D.
     """
-    raise NotImplementedError(
-        "Model B traction-continuity penalty is a future stage. Do not enable "
-        "until Model A trains end-to-end on the toy 2D case (see project plan)."
+    if len(velocity_pred) != 2:
+        raise NotImplementedError("traction_continuity_loss is 2D only for now")
+    t_fluid = fluid_traction_2d(
+        velocity_pred[0], velocity_pred[1], pressure_pred, coords, normals, mu
     )
+    res = t_fluid - structure_traction
+    return _relative_mse(res, structure_traction) if relative else res.pow(2).mean()

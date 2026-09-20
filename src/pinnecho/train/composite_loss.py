@@ -38,6 +38,7 @@ class LossWeights:
     bc: float = 1.0
     ic: float = 0.1
     periodic: float = 0.1
+    traction: float = 1.0
 
 
 @dataclass
@@ -95,7 +96,15 @@ class CompositeLoss:
     anneal: AnnealSchedule = field(default_factory=AnnealSchedule)
     diffusivity: float = 1e-6
     scalar_source: float = 1.0
-    forcing: Optional[str] = None  # None (Model A) or "fsi" (Model B, future)
+    forcing: Optional[str] = None  # None (Model A) or "fsi" (Model B forcing)
+    # Wall BC source for Model B: "kinematic" (contour dc/dt) or "fsi" (FSI
+    # structural wall velocity). Both use the "wall" batch's u_wall target.
+    wall_mode: str = "kinematic"
+    # Optional traction-continuity penalty (Model B option ii): needs a
+    # "traction" batch. traction_scale non-dimensionalises the traction residual
+    # (~ L/(rho U^2), i.e. inverse stress scale).
+    use_traction: bool = False
+    traction_scale: float = 1.0
     # Residual non-dimensionalisation: multiply raw residuals by these before
     # squaring so continuity / momentum / scalar terms are O(1) and comparable
     # (continuity_scale ~ L/U, momentum_scale ~ L/(rho U^2)). Defaults keep the
@@ -169,7 +178,10 @@ class CompositeLoss:
         b = batches.get("wall")
         if b is not None:
             vel = model.velocity(b["X"])
-            bc_loss = bc_loss + bc.wall_kinematic_loss(vel, b["u_wall"])
+            if self.wall_mode == "fsi":
+                bc_loss = bc_loss + bc.fsi_wall_velocity_loss(vel, b["u_wall"])
+            else:
+                bc_loss = bc_loss + bc.wall_kinematic_loss(vel, b["u_wall"])
         b = batches.get("valve")
         if b is not None:
             vel = model.velocity(b["X"])
@@ -179,6 +191,19 @@ class CompositeLoss:
             c = model.fields(b["X"])["c"]
             bc_loss = bc_loss + bc.scalar_inflow_loss(c)
         out["bc"] = bc_loss
+
+        # --- Traction continuity (Model B option ii) ---
+        b = batches.get("traction")
+        if self.use_traction and b is not None:
+            X = b["X"].requires_grad_(True)
+            f = model.fields(X)
+            vel = [f[k] for k in (["u", "v", "w"][: model.spatial_dim])]
+            res = bc.traction_continuity_loss(
+                vel, f["p"], X, b["normals"], b["structure_traction"], self.mu,
+            )
+            out["traction"] = res
+        else:
+            out["traction"] = zero
 
         # --- Initial condition ---
         b = batches.get("ic")
@@ -207,6 +232,7 @@ class CompositeLoss:
             + w.bc * out["bc"]
             + w.ic * out["ic"]
             + w.periodic * out["periodic"]
+            + w.traction * out["traction"]
         )
         out["total"] = total
         out["pde_scale"] = torch.as_tensor(pde_scale)

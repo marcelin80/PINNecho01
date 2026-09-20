@@ -4,6 +4,7 @@ from .boundary_conditions import (
     valve_dirichlet_loss,
     scalar_inflow_loss,
     fsi_wall_velocity_loss,
+    fluid_traction_2d,
     traction_continuity_loss,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "valve_dirichlet_loss",
     "scalar_inflow_loss",
     "fsi_wall_velocity_loss",
+    "fluid_traction_2d",
     "traction_continuity_loss",
 ]

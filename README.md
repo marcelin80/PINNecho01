@@ -41,7 +41,7 @@ and differ only in the body-forcing term `f`:
 | | Backbone A — `baseline` | Backbone B — `fsi_informed` |
 |---|---|---|
 | Momentum forcing `f` | `0` (generic incompressible NS) | FSI body forcing from the IBAMR/IBFE run |
-| Wall BC | kinematic no-slip (velocity from moving contour) | kinematic no-slip (identical in Stage 1) |
+| Wall BC | kinematic no-slip (velocity from moving contour) | FSI wall velocity + optional traction-continuity penalty (`sigma_f·n = t_struct`) |
 | Mirrors | AI-VFM, iVFM-PINN, CSF-PINN | proposed method |
 
 The FSI forcing `f` represents the **net effect of myocardial active contraction
@@ -205,9 +205,9 @@ specification incrementally. Current status:
 | Composite loss (data/pde/scalar/bc/ic/periodic) + annealing | `train/composite_loss.py` | **Implemented** (data loss is beam-component only) |
 | Model A kinematic BC + valve/inflow | `bc/boundary_conditions.py` | **Implemented** |
 | Validation metrics + spline baseline | `evaluate.py` | **Implemented** (primitives); end-to-end driver scaffolded |
-| Training entry | `train/train.py` | **Implemented**; Model A validated end-to-end on the toy 2D case |
+| Training entry + A/B compare | `train/train.py` | **Implemented**; Model A and Model B validated end-to-end on the toy 2D case |
 | IBFE loader / Doppler synthesis | `data/load_ibfe_output.py`, `data/synthesize_doppler.py` | **TODO stubs** with documented tensor shapes |
-| Model B (FSI wall velocity / traction continuity) | `bc/boundary_conditions.py` | **Not started** (deliberately, until Model A validates — now next) |
+| Model B (FSI forcing + FSI wall velocity + traction continuity) | `bc/boundary_conditions.py` | **Implemented** + tested; A-vs-B ablation run |
 
 > **Staging.** Per the plan, Model B's traction-matching BC is not begun until
 > Model A trains successfully end-to-end on the toy 2D case, and each stage is
@@ -241,7 +241,52 @@ genuinely fits the sparse **single-component** Doppler and — via the physics �
 recovers the unseen cross-beam component and the velocity gradients (vorticity /
 WSS correlations 0.65–0.82). Pressure is poorly recovered by the baseline
 (`f = 0` momentum ⇒ wrong pressure gradient): this is exactly the weakness the
-**FSI-informed Model B** is designed to address next.
+**FSI-informed Model B** is designed to address.
+
+### Model A vs Model B — the ablation
+
+`scripts/compare_models_ab.py` trains **both** backbones from the **same
+initialisation** on the **same** data with an **identical network**, so the only
+differences are the FSI momentum forcing, the FSI wall-velocity BC, and
+(optionally) the traction-continuity penalty:
+
+```bash
+# core hypothesis: FSI momentum forcing + FSI wall velocity
+python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300
+# add the traction-continuity BC to Model B
+python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300 --traction
+```
+
+Reference runs (identical arch/data/init; relative L2 unless noted; **↓** = lower
+is better, **↑** = higher is better):
+
+| metric | Model A | Model B (forcing) | Model B (forcing + traction) |
+|---|---|---|---|
+| speed ↓ | 0.456 | 0.454 | 0.452 |
+| velocity `u` ↓ | 0.681 | 0.650 | 0.659 |
+| velocity `v` ↓ | 0.524 | 0.512 | 0.494 |
+| **vorticity** ↓ (corr ↑) | 0.585 (0.81) | 0.561 (0.83) | **0.549 (0.84)** |
+| **wall shear stress** ↓ (corr ↑) | 0.516 (0.67) | 0.489 (0.69) | **0.487 (0.68)** |
+| **pressure** ↓ (corr ↑) | 0.827 (0.67) | 2.209 (0.79) | **0.105 (0.996)** |
+
+**Reading the result.**
+* **FSI forcing alone** improves exactly the velocity-**gradient** quantities
+  this project targets (vorticity, WSS — the metrics CSF-PINN reported as weak)
+  *and* the pressure **correlation** (0.67 → 0.79), confirming the core
+  hypothesis. Its pressure **magnitude** degrades, though (relL2 0.83 → 2.21):
+  the large FSI forcing dominates the momentum balance, so imperfect velocity
+  recovery (the single-component observability limit, ~0.45 speed error for
+  both) is amplified into the pressure — while the baseline's `f = 0` yields a
+  more bounded (but structurally wronger) pressure.
+* **Adding the traction-continuity BC** resolves this: enforcing
+  `sigma_f . n = t_structure` at the wall pins the pressure gauge/magnitude, and
+  Model B then wins on **every** metric — most dramatically pressure
+  (relL2 **0.827 → 0.105**, corr **0.67 → 0.996**) — while keeping the gradient
+  improvements. This is the intended payoff of informing the PINN with the
+  structural model rather than position-matching alone.
+
+Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
+[`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json).
 
 ---
 

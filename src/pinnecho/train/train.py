@@ -126,26 +126,50 @@ def input_bounds(geometry, flow, pad: float = 1.15):
     return lows, highs
 
 
-def build_toy_model_a(config, model_overrides: Optional[dict] = None):
-    """Assemble ``(model, loss_fn, dataset, lv)`` for the toy 2D Model A run.
+def build_toy_dataset(config):
+    """Build the shared synthetic-LV dataset + generator (identical for A and B).
 
-    Uses the synthetic LV FSI generator as a stand-in for real IBFE output. The
-    data term sees only the single-component Doppler signal; the physics is the
-    baseline incompressible NS (forcing = 0). Residual/output scales come from
-    the dataset's reference scales so everything is O(1) during optimisation.
+    Also precomputes the true fluid-interface traction at the wall points, used
+    as the FSI structural-traction target for the traction-continuity BC.
     """
     from ..data.dataset import build_dataset
     from ..data.synthetic_lv import SyntheticLVFSI
+    from ..bc.boundary_conditions import fluid_traction_2d
 
-    lv = SyntheticLVFSI(config.geometry, config.flow, dtype=torch.get_default_dtype())
-    dataset = build_dataset(config, lv=lv, dtype=torch.get_default_dtype())
+    dtype = torch.get_default_dtype()
+    lv = SyntheticLVFSI(config.geometry, config.flow, dtype=dtype)
+    dataset = build_dataset(config, lv=lv, dtype=dtype)
+
+    # True interface traction (structure == fluid at the interface for the exact
+    # synthetic solution) as the traction-continuity target.
+    Xg = dataset.wall_X.clone().requires_grad_(True)
+    uv = lv._velocity_from_graph(Xg)
+    p = lv.pressure(Xg)
+    t_true = fluid_traction_2d(uv[:, 0:1], uv[:, 1:2], p, Xg,
+                              dataset.wall_normal, config.flow.viscosity).detach()
+    dataset.extras["wall_traction"] = t_true
+    return dataset, lv
+
+
+def build_toy_model(config, dataset, backbone: str = "baseline",
+                    model_overrides: Optional[dict] = None, init_seed: int = 0,
+                    use_traction: bool = False):
+    """Assemble ``(model, loss_fn)`` for a backbone on the shared toy dataset.
+
+    ``backbone`` is ``"baseline"`` (Model A, forcing = 0, kinematic wall) or
+    ``"fsi_informed"`` (Model B: FSI momentum forcing + FSI wall velocity, and
+    optionally the traction-continuity penalty). The network architecture is
+    identical for both; ``init_seed`` seeds the weight init so the comparison
+    starts both backbones from the *same* parameters.
+    """
     s = dataset.scales
-
     lows, highs = input_bounds(config.geometry, config.flow)
     m = dict(spatial_dim=2, width=96, depth=5, activation="tanh",
              fourier_features=0, predict_scalar=False)
     if model_overrides:
         m.update(model_overrides)
+
+    torch.manual_seed(init_seed)  # identical initialisation across backbones
     model = PINNNet(
         input_lows=lows, input_highs=highs,
         velocity_scale=s.velocity, pressure_scale=s.pressure,
@@ -154,20 +178,34 @@ def build_toy_model_a(config, model_overrides: Optional[dict] = None):
 
     cont_scale = s.length / max(s.velocity, 1e-30)
     mom_scale = s.length / max(dataset.density * s.velocity ** 2, 1e-30)
+    is_fsi = backbone == "fsi_informed"
+    weights = LossWeights(data=10.0, pde=1.0, scalar=0.0, bc=10.0,
+                          ic=0.0, periodic=0.0,
+                          traction=5.0 if use_traction else 0.0)
     loss_fn = CompositeLoss(
         rho=dataset.density, mu=dataset.viscosity,
-        weights=LossWeights(data=10.0, pde=1.0, scalar=0.0, bc=10.0,
-                            ic=0.0, periodic=0.0),
+        weights=weights,
         anneal=AnnealSchedule(enabled=True, pde_warmup_frac=0.3),
-        forcing=None,  # Model A baseline
+        forcing="fsi" if is_fsi else None,
+        wall_mode="fsi" if is_fsi else "kinematic",
+        use_traction=use_traction,
         continuity_scale=cont_scale, momentum_scale=mom_scale,
+        traction_scale=mom_scale,
     )
+    return model, loss_fn
+
+
+def build_toy_model_a(config, model_overrides: Optional[dict] = None):
+    """Convenience: shared dataset + Model A ``(model, loss_fn, dataset, lv)``."""
+    dataset, lv = build_toy_dataset(config)
+    model, loss_fn = build_toy_model(config, dataset, backbone="baseline",
+                                     model_overrides=model_overrides)
     return model, loss_fn, dataset, lv
 
 
 def make_toy_batch_builder(dataset, seed: int = 0,
                            n_data: int = 2048, n_col: int = 2048,
-                           n_wall: int = 512):
+                           n_wall: int = 512, with_traction: bool = False):
     """Return a ``build_batches(step)`` closure that subsamples the fixed sets."""
     g = torch.Generator().manual_seed(seed)
 
@@ -180,7 +218,7 @@ def make_toy_batch_builder(dataset, seed: int = 0,
         di = _idx(dataset.meas_X.shape[0], n_data)
         ci = _idx(dataset.col_X.shape[0], n_col)
         wi = _idx(dataset.wall_X.shape[0], n_wall)
-        return {
+        batches = {
             "data": {
                 "X": dataset.meas_X[di].clone(),
                 "beam_dir": dataset.meas_beam[di],
@@ -195,6 +233,13 @@ def make_toy_batch_builder(dataset, seed: int = 0,
                 "u_wall": dataset.wall_velocity[wi],
             },
         }
+        if with_traction and "wall_traction" in dataset.extras:
+            batches["traction"] = {
+                "X": dataset.wall_X[wi].clone(),
+                "normals": dataset.wall_normal[wi],
+                "structure_traction": dataset.extras["wall_traction"][wi],
+            }
+        return batches
 
     return build_batches
 
@@ -233,6 +278,121 @@ def main() -> None:  # pragma: no cover - CLI wiring
     print("\nHeld-out reconstruction metrics (relative L2 unless noted):")
     for k, v in metrics.items():
         print(f"  {k:28s} {v:.4f}")
+
+
+def compare_backbones_toy(config, steps: int = 3000, lbfgs_iters: int = 300,
+                          lr: float = 2e-3, seed: int = 0,
+                          use_traction: bool = False, verbose: bool = True):
+    """Train Model A and Model B on the SAME data/init and return side-by-side.
+
+    The only differences between the two runs are the FSI momentum forcing, the
+    FSI wall-velocity BC, and (optionally) the traction-continuity penalty. The
+    network, initialisation, dataset, optimiser schedule and batch order are
+    identical, so the comparison isolates the backbone effect.
+    """
+    from ..train.evaluate_toy import evaluate_toy
+
+    dataset, lv = build_toy_dataset(config)
+    results = {}
+    for backbone in ("baseline", "fsi_informed"):
+        model, loss_fn = build_toy_model(
+            config, dataset, backbone=backbone, init_seed=seed,
+            use_traction=(use_traction and backbone == "fsi_informed"),
+        )
+        loss_fn.anneal.total_steps = steps
+        build_batches = make_toy_batch_builder(
+            dataset, seed=seed,
+            with_traction=(use_traction and backbone == "fsi_informed"),
+        )
+        cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
+                          log_every=max(1, steps // 6), seed=seed)
+        logger = None
+        if verbose:
+            print(f"\n=== Training backbone: {backbone} ===")
+
+            def logger(step, row, _b=backbone):
+                print(f"[{_b[:4]} {step:5d}] " + " ".join(
+                    f"{k}={row[k]:.3e}" for k in ("total", "data", "pde", "bc")
+                    if k in row))
+        train_model(model, loss_fn, build_batches, cfg, logger=logger)
+        results[backbone] = evaluate_toy(model, lv, config)
+    return results
+
+
+def main() -> None:  # pragma: no cover - CLI wiring
+    """CLI: train Model A end-to-end on the toy 2D case with the spec modules."""
+    import argparse
+    from ..config import load_config, Config
+
+    parser = argparse.ArgumentParser(description="Train Model A (toy 2D case).")
+    parser.add_argument("--config", default=None, help="YAML config (geometry/flow).")
+    parser.add_argument("--steps", type=int, default=3000)
+    parser.add_argument("--lbfgs-iters", type=int, default=300)
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+
+    torch.set_default_dtype(torch.float64)
+    config = load_config(args.config) if args.config else Config()
+
+    model, loss_fn, dataset, lv = build_toy_model_a(config)
+    loss_fn.anneal.total_steps = args.steps
+    build_batches = make_toy_batch_builder(dataset, seed=args.seed)
+    cfg = TrainConfig(steps=args.steps, lr=args.lr, lbfgs_iters=args.lbfgs_iters,
+                      log_every=max(1, args.steps // 10), seed=args.seed)
+
+    def logger(step, row):
+        print(f"[{step:5d}] " + " ".join(f"{k}={row[k]:.4e}" for k in
+              ("total", "data", "pde", "bc") if k in row))
+
+    print("Training Model A (baseline, kinematic no-slip) on the toy 2D case...")
+    train_model(model, loss_fn, build_batches, cfg, logger=logger)
+
+    from ..train.evaluate_toy import evaluate_toy  # local to avoid cycles
+    metrics = evaluate_toy(model, lv, config)
+    print("\nHeld-out reconstruction metrics (relative L2 unless noted):")
+    for k, v in metrics.items():
+        print(f"  {k:28s} {v:.4f}")
+
+
+def compare_main() -> None:  # pragma: no cover - CLI wiring
+    """CLI: A-vs-B comparison on the toy case (identical architecture/data/init)."""
+    import argparse
+    import json
+    from pathlib import Path
+    from ..config import load_config, Config
+
+    parser = argparse.ArgumentParser(description="Compare Model A vs B (toy case).")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--steps", type=int, default=3000)
+    parser.add_argument("--lbfgs-iters", type=int, default=300)
+    parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--traction", action="store_true",
+                        help="add the traction-continuity penalty to Model B")
+    parser.add_argument("--out", default=None, help="write comparison.json here")
+    args = parser.parse_args()
+
+    torch.set_default_dtype(torch.float64)
+    config = load_config(args.config) if args.config else Config()
+    results = compare_backbones_toy(
+        config, steps=args.steps, lbfgs_iters=args.lbfgs_iters, lr=args.lr,
+        seed=args.seed, use_traction=args.traction,
+    )
+
+    keys = sorted({k for r in results.values() for k in r})
+    print("\n=== Model A (baseline) vs Model B (fsi_informed) ===")
+    print(f"{'metric':28s} {'baseline':>12s} {'fsi_informed':>14s} {'delta':>10s}")
+    for k in keys:
+        a = results['baseline'].get(k, float('nan'))
+        b = results['fsi_informed'].get(k, float('nan'))
+        print(f"{k:28s} {a:12.4f} {b:14.4f} {b - a:10.4f}")
+
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        with open(args.out, "w") as fh:
+            json.dump(results, fh, indent=2)
+        print(f"\nWrote {args.out}")
 
 
 if __name__ == "__main__":  # pragma: no cover

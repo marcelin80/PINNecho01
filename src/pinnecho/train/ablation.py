@@ -499,6 +499,88 @@ def run_forcing_perturbation(config, *, seeds: Sequence[int] = (0, 1, 2),
     }
 
 
+def run_forcing_shuffle(config, *, seeds: Sequence[int] = (0, 1, 2, 3, 4),
+                        steps: int = 2500, lbfgs_iters: int = 200,
+                        lr: float = 2e-3, verbose: bool = True,
+                        ) -> Dict[str, object]:
+    """Does the gradient advantage survive a *trajectory-decorrelated* forcing?
+
+    Correlation gates (Check 0/0b) only catch *linear, pointwise* leakage. But the
+    dominant forcing term ``rho Du/Dt = rho(du/dt + u.grad u)`` is a **nonlinear**
+    function of the *true* velocity -- computable only if the answer is known. A
+    network could integrate such a forcing to recover the trajectory even when its
+    pointwise correlation with ``u`` is low, and the 30% perturbation of Ablation 5
+    still lives "near the truth" so cannot detect this.
+
+    This diagnostic replaces the collocation forcing with a **random permutation**
+    of itself (each collocation point receives another point's forcing vector):
+    identical marginal distribution, zero correspondence with the local true flow.
+    Comparison (1 window, exact wall, no traction):
+
+    * ``baseline``  -- no forcing (``f = 0``);
+    * ``forcing_exact``    -- the true forcing;
+    * ``forcing_shuffled`` -- the permuted (wrong-trajectory) forcing.
+
+    Reading: if ``forcing_shuffled`` keeps the vorticity/WSS advantage over
+    ``baseline``, the benefit is generic physics regularisation (non-circular). If
+    it collapses toward ``baseline`` (or worse), the Ablation-4/5 advantage was
+    carrying trajectory-specific information -- a nonlinear leak the correlation
+    gates missed. ``w2_baseline`` is included for the paired WSS/vorticity check.
+
+    Returns ``{"variants": {..}, "paired": {..}, "raw": {..}}``.
+    """
+    cfg1 = _apply_windows(config, 1)
+    cfg2 = _apply_windows(config, 2)
+    rows: Dict[str, List[Dict[str, float]]] = {
+        "baseline": [], "forcing_exact": [], "forcing_shuffled": [],
+        "w2_baseline": [],
+    }
+    for seed in seeds:
+        ds1, lv1 = build_toy_dataset(cfg1, seed=seed)
+        ds1.extras["_lv"] = lv1
+        gperm = torch.Generator().manual_seed(seed + 991)
+        perm = torch.randperm(ds1.col_forcing.shape[0], generator=gperm)
+        ds1.extras["col_forcing_shuffled"] = ds1.col_forcing[perm].clone()
+        variants = [
+            Variant("baseline", "baseline", "fsi", note="1 window, no forcing"),
+            Variant("forcing_exact", "fsi_informed", "fsi",
+                    note="1 window, true forcing"),
+            Variant("forcing_shuffled", "fsi_informed", "fsi",
+                    forcing_key="col_forcing_shuffled",
+                    note="1 window, permuted (wrong-trajectory) forcing"),
+        ]
+        for v in variants:
+            if verbose:
+                print(f"\n=== [seed {seed}] {v.name}: {v.note} ===")
+            rows[v.name].append(_run_variant(
+                cfg1, ds1, v, steps=steps, lbfgs_iters=lbfgs_iters, lr=lr,
+                seed=seed, verbose=verbose))
+        ds2, lv2 = build_toy_dataset(cfg2, seed=seed)
+        ds2.extras["_lv"] = lv2
+        vb = Variant("w2_baseline", "baseline", "fsi", note="2 windows, no FSI")
+        if verbose:
+            print(f"\n=== [seed {seed}] {vb.name}: {vb.note} ===")
+        rows["w2_baseline"].append(_run_variant(
+            cfg2, ds2, vb, steps=steps, lbfgs_iters=lbfgs_iters, lr=lr,
+            seed=seed, verbose=verbose))
+
+    paired, raw = {}, {}
+    pairs = {
+        "exact_vs_baseline": ("forcing_exact", "baseline"),
+        "shuffled_vs_baseline": ("forcing_shuffled", "baseline"),
+        "exact_vs_shuffled": ("forcing_exact", "forcing_shuffled"),
+        "exact_vs_w2baseline": ("forcing_exact", "w2_baseline"),
+    }
+    for metric in ("vorticity_corr", "wss_corr"):
+        for pname, (a, b) in pairs.items():
+            raw[f"{a}_{metric}"] = [r[metric] for r in rows[a]]
+            paired[f"{pname}:{metric}"] = _paired_stats(
+                [r[metric] for r in rows[a]], [r[metric] for r in rows[b]],
+                higher_better=True)
+    return {"variants": {k: _aggregate(v) for k, v in rows.items()},
+            "paired": paired, "raw": raw}
+
+
 def _fmt_table(results: Dict[str, Dict[str, Tuple[float, float]]],
                metrics: Sequence[str] = KEY_METRICS) -> str:
     """Pretty ``mean+/-std`` table (rows = variants, cols = metrics)."""
@@ -530,7 +612,8 @@ def main() -> None:  # pragma: no cover - CLI wiring
     parser.add_argument(
         "--which",
         choices=["isolation", "perturbation", "coupling", "pressure-obs",
-                 "substitution", "forcing-perturbation", "both", "all"],
+                 "substitution", "forcing-perturbation", "forcing-shuffle",
+                 "both", "all"],
         default="both",
         help="which experiment(s) to run ('both'=isolation+perturbation, "
              "'all'=every experiment)")
@@ -637,6 +720,24 @@ def main() -> None:  # pragma: no cover - CLI wiring
             "w2_baseline": {m: list(v) for m, v in fp["w2_baseline"].items()},
             "paired": fp["paired"],
             "raw": fp["raw"],
+        }
+
+    if want("forcing-shuffle"):
+        fs = run_forcing_shuffle(
+            config, seeds=args.seeds, steps=args.steps,
+            lbfgs_iters=args.lbfgs_iters, lr=args.lr)
+        print("\n################ ABLATION 6: forcing-SHUFFLE diagnostic "
+              "(nonlinear/trajectory leak) ################")
+        print(_fmt_table(fs["variants"]))
+        print("\n  paired (higher corr = first wins):")
+        for name, st in fs["paired"].items():
+            print(f"    {name:32s} mean_diff={st['mean_diff']:+.4f} "
+                  f"std={st['std_diff']:.4f} t={st['t_stat']:+.3f} "
+                  f"wins={int(st['n_wins'])}/{int(st['n'])}")
+        payload["forcing_shuffle"] = {
+            "variants": {k: {m: list(v) for m, v in r.items()}
+                         for k, r in fs["variants"].items()},
+            "paired": fs["paired"], "raw": fs["raw"],
         }
 
     if args.out:

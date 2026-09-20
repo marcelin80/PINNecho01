@@ -14,6 +14,7 @@ from pinnecho.train.ablation import (
     run_pressure_observability,
     run_observability_physics,
     run_forcing_perturbation,
+    run_forcing_shuffle,
     forcing_pressure_coupling,
     _apply_windows,
     _pearson,
@@ -98,6 +99,16 @@ def test_forcing_perturbation_tiny():
                                    steps=25, lbfgs_iters=0, verbose=False)
     assert "eps=0.00" in res["levels"] and "eps=0.30" in res["levels"]
     assert "vorticity_corr" in res["paired"] and "wss_corr" in res["paired"]
+
+
+def test_forcing_shuffle_tiny():
+    torch.set_default_dtype(torch.float32)
+    cfg = Config()
+    res = run_forcing_shuffle(cfg, seeds=(0,), steps=25, lbfgs_iters=0,
+                              verbose=False)
+    for k in ("baseline", "forcing_exact", "forcing_shuffled", "w2_baseline"):
+        assert k in res["variants"]
+    assert "exact_vs_shuffled:wss_corr" in res["paired"]
 
 
 def test_pressure_observability_tiny():

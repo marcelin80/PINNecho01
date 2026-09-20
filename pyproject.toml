@@ -41,6 +41,7 @@ pinnecho-compare-ab = "pinnecho.train.train:compare_main"
 pinnecho-visualize = "pinnecho.train.train:visualize_main"
 pinnecho-sweep = "pinnecho.train.observability:sweep_main"
 pinnecho-train-3d = "pinnecho.train.train3d:main"
+pinnecho-ablation = "pinnecho.train.ablation:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

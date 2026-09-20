@@ -222,13 +222,19 @@ def build_toy_model_a(config, model_overrides: Optional[dict] = None):
 def make_toy_batch_builder(dataset, seed: int = 0,
                            n_data: int = 2048, n_col: int = 2048,
                            n_wall: int = 512, with_traction: bool = False,
-                           wall_target: str = "fsi"):
+                           wall_target: str = "fsi",
+                           traction_key: str = "wall_traction"):
     """Return a ``build_batches(step)`` closure that subsamples the fixed sets.
 
     ``wall_target`` selects the wall-velocity BC target: ``"kinematic"`` (the
     contour-tracking estimate, for Model A) or ``"fsi"`` (the accurate FSI wall
     velocity, for Model B). Falls back to ``dataset.wall_velocity`` if the
     diverged velocities are not present.
+
+    ``traction_key`` selects which ``dataset.extras`` entry supplies the
+    traction-continuity target. Defaults to the exact ``"wall_traction"``; the
+    ablation driver stores perturbed copies under other keys to run the
+    traction-uncertainty stress test without touching the exact target.
     """
     g = torch.Generator().manual_seed(seed)
     if wall_target == "kinematic":
@@ -260,11 +266,11 @@ def make_toy_batch_builder(dataset, seed: int = 0,
                 "u_wall": u_wall_all[wi],
             },
         }
-        if with_traction and "wall_traction" in dataset.extras:
+        if with_traction and traction_key in dataset.extras:
             batches["traction"] = {
                 "X": dataset.wall_X[wi].clone(),
                 "normals": dataset.wall_normal[wi],
-                "structure_traction": dataset.extras["wall_traction"][wi],
+                "structure_traction": dataset.extras[traction_key][wi],
             }
         return batches
 

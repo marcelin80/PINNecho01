@@ -18,6 +18,7 @@ env/
 runs/
 outputs/
 data/generated/
+data/ibfe_example/
 *.pt
 *.ckpt
 *.npz

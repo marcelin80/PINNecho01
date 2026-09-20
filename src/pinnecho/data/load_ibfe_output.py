@@ -46,6 +46,7 @@ Shapes for 3D: append a ``z`` column to every ``coords_*`` (making them
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -81,39 +82,118 @@ def load_ibfe_output(
     time_range: Optional[tuple] = None,
     subsample: Optional[int] = None,
     spatial_dim: int = 2,
+    dtype: torch.dtype = torch.float64,
 ) -> IBFEFrames:
     """Load one cardiac cycle of IBAMR/IBFE output into :class:`IBFEFrames`.
+
+    Dispatches by ``path``:
+
+    * ``*.npz``                     -> :func:`~pinnecho.data.ibfe_io.load_ibfe_npz`
+    * a directory / ``*.yaml|*.yml``-> :func:`~pinnecho.data.ibfe_io.load_ibfe_manifest`
+      (a directory is expected to contain ``manifest.yaml``)
+
+    See :mod:`pinnecho.data.ibfe_io` for the exact on-disk contract (NPZ keys,
+    manifest schema, CSV column names). ``time_range`` (seconds) restricts to one
+    cycle; ``subsample`` thins each dense point set to at most that many points
+    per set (for tractable training on very large meshes).
 
     Parameters
     ----------
     path
-        Path to the IBFE output (directory or file); format TBD by the user.
+        ``.npz`` bundle, ``manifest.yaml``, or a directory containing one.
     time_range
         Optional ``(t0, t1)`` window in seconds to restrict to one cycle.
     subsample
-        Optional stride/count to thin dense meshes for tractable training.
+        Optional max number of points to keep per point set (uniform random).
     spatial_dim
-        2 or 3.
-
-    Returns
-    -------
-    IBFEFrames
-        Tensors with the shapes documented at module level.
-
-    Notes
-    -----
-    TODO: implement once the concrete IBFE export format is provided. The
-    implementation must (1) read the Eulerian fluid grid and Lagrangian
-    structure mesh, (2) interpolate structure velocity/traction onto the
-    fluid-structure interface, (3) compute or read the net fluid body force,
-    and (4) non-dimensionalise consistently with :mod:`pinnecho.data.dataset`.
+        Sanity-checked against the loaded bundle's ``spatial_dim``.
+    dtype
+        Torch dtype for the returned tensors.
     """
-    raise NotImplementedError(
-        "load_ibfe_output is a documented stub. Supply the IBFE export format "
-        "and implement per the shapes in this module's docstring. For Stage-1 "
-        "development use synthetic_ibfe_frames(...) below, which produces the "
-        "same IBFEFrames bundle from the manufactured synthetic-LV field."
-    )
+    from .ibfe_io import load_ibfe_npz, load_ibfe_manifest
+
+    p = Path(path)
+    if p.suffix == ".npz":
+        frames = load_ibfe_npz(p, dtype=dtype)
+    elif p.suffix in (".yaml", ".yml"):
+        frames = load_ibfe_manifest(p, dtype=dtype)
+    elif p.is_dir():
+        manifest = p / "manifest.yaml"
+        if not manifest.exists():
+            raise FileNotFoundError(
+                f"{p} is a directory but contains no manifest.yaml. Provide a "
+                "manifest (see pinnecho.data.ibfe_io.load_ibfe_manifest) or an "
+                "*.npz bundle.")
+        frames = load_ibfe_manifest(manifest, dtype=dtype)
+    else:
+        raise ValueError(
+            f"Unrecognised IBFE export path '{path}'. Expected a .npz bundle, a "
+            ".yaml manifest, or a directory containing manifest.yaml. For Stage-1 "
+            "development use synthetic_ibfe_frames(...) / synthetic_ibfe_frames_3d(...).")
+
+    if frames.spatial_dim != spatial_dim:
+        raise ValueError(
+            f"loaded spatial_dim={frames.spatial_dim} but caller asked for "
+            f"spatial_dim={spatial_dim}")
+
+    if time_range is not None:
+        frames = _restrict_time(frames, time_range)
+    if subsample is not None:
+        frames = _subsample(frames, subsample)
+    return frames
+
+
+def _restrict_time(frames: IBFEFrames, time_range: tuple) -> IBFEFrames:
+    """Keep only points whose time column lies in ``[t0, t1]``."""
+    import dataclasses
+
+    t0, t1 = float(time_range[0]), float(time_range[1])
+    dim = frames.spatial_dim
+
+    def _mask(coords):
+        if coords.shape[0] == 0:
+            return coords.new_ones(0, dtype=torch.bool)
+        t = coords[:, dim]
+        return (t >= t0) & (t <= t1)
+
+    pairs = [("coords_fluid", ["velocity_fluid", "pressure_fluid", "forcing_fluid"]),
+             ("coords_wall", ["normals_wall", "velocity_wall", "traction_wall"]),
+             ("coords_mitral", ["velocity_mitral"]),
+             ("coords_aortic", ["velocity_aortic"])]
+    updates = {}
+    for coord_key, deps in pairs:
+        coords = getattr(frames, coord_key)
+        m = _mask(coords)
+        updates[coord_key] = coords[m]
+        for d in deps:
+            updates[d] = getattr(frames, d)[m]
+    return dataclasses.replace(frames, **updates)
+
+
+def _subsample(frames: IBFEFrames, max_points: int) -> IBFEFrames:
+    """Uniformly thin every point set to at most ``max_points`` points."""
+    import dataclasses
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+
+    def _idx(n):
+        if n <= max_points:
+            return torch.arange(n)
+        return torch.as_tensor(rng.choice(n, size=max_points, replace=False))
+
+    groups = [("coords_fluid", ["velocity_fluid", "pressure_fluid", "forcing_fluid"]),
+              ("coords_wall", ["normals_wall", "velocity_wall", "traction_wall"]),
+              ("coords_mitral", ["velocity_mitral"]),
+              ("coords_aortic", ["velocity_aortic"])]
+    updates = {}
+    for coord_key, deps in groups:
+        coords = getattr(frames, coord_key)
+        idx = _idx(coords.shape[0])
+        updates[coord_key] = coords[idx]
+        for d in deps:
+            updates[d] = getattr(frames, d)[idx]
+    return dataclasses.replace(frames, **updates)
 
 
 def synthetic_ibfe_frames(
@@ -122,9 +202,11 @@ def synthetic_ibfe_frames(
     n_wall: int = 800,
     n_frames: int = 16,
     seed: int = 0,
+    with_valve: bool = False,
+    mitral_fraction: float = 0.35,
     dtype: torch.dtype = torch.float64,
 ) -> IBFEFrames:
-    """Produce an :class:`IBFEFrames` bundle from the synthetic-LV stand-in.
+    """Produce a 2D :class:`IBFEFrames` bundle from the synthetic-LV stand-in.
 
     This exercises the exact interface a real IBAMR/IBFE loader will return, so
     downstream code can be developed and tested against ``IBFEFrames`` now and
@@ -132,8 +214,12 @@ def synthetic_ibfe_frames(
     interface velocity/traction and body forcing come from the manufactured,
     NS-exact synthetic field.
 
-    Valve arrays are returned empty (the closed area-preserving synthetic cavity
-    has no mitral/aortic openings); real IBFE output will populate them.
+    ``with_valve`` populates the mitral-valve arrays with the upper
+    ``mitral_fraction`` of the wall as an *inflow-boundary plumbing stand-in*
+    (coords + wall velocity), so the valve Dirichlet term and the residence-time
+    ``c = 0`` inflow reinitialisation can be developed/tested before real valve
+    data is available. The closed area-preserving synthetic cavity has no true
+    net inflow, so this is a plumbing placeholder, not a physical mitral jet.
     """
     import numpy as np
 
@@ -163,16 +249,109 @@ def synthetic_ibfe_frames(
         config.flow.viscosity,
     ).detach()
 
-    empty3 = torch.zeros(0, 3, dtype=dtype)
-    empty2 = torch.zeros(0, 2, dtype=dtype)
+    coords_mitral = torch.zeros(0, 3, dtype=dtype)
+    velocity_mitral = torch.zeros(0, 2, dtype=dtype)
+    if with_valve:
+        coords_mitral, velocity_mitral = _mitral_patch(
+            coords_wall, velocity_wall, spatial_dim=2, fraction=mitral_fraction)
+
     return IBFEFrames(
         coords_fluid=coords_fluid, velocity_fluid=velocity_fluid,
         pressure_fluid=pressure_fluid, forcing_fluid=forcing_fluid,
         coords_wall=coords_wall, normals_wall=normals_wall,
         velocity_wall=velocity_wall, traction_wall=traction_wall,
-        coords_mitral=empty3, velocity_mitral=empty2,
-        coords_aortic=empty3, velocity_aortic=empty2,
+        coords_mitral=coords_mitral, velocity_mitral=velocity_mitral,
+        coords_aortic=torch.zeros(0, 3, dtype=dtype),
+        velocity_aortic=torch.zeros(0, 2, dtype=dtype),
         cycle_period=float(config.flow.period),
         rho=float(config.flow.density), mu=float(config.flow.viscosity),
         spatial_dim=2,
+    )
+
+
+def _mitral_patch(coords_wall: torch.Tensor, velocity_wall: torch.Tensor,
+                  spatial_dim: int, fraction: float = 0.35):
+    """Designate the upper ``fraction`` of wall points (max y) as a mitral patch.
+
+    Returns ``(coords, velocity)`` for the selected wall subset -- an inflow
+    plumbing stand-in (see :func:`synthetic_ibfe_frames`).
+    """
+    y = coords_wall[:, 1]
+    if y.numel() == 0:
+        return coords_wall.new_zeros(0, spatial_dim + 1), velocity_wall.new_zeros(0, spatial_dim)
+    thresh = torch.quantile(y, 1.0 - float(fraction))
+    mask = y >= thresh
+    return coords_wall[mask].clone(), velocity_wall[mask].clone()
+
+
+def synthetic_ibfe_frames_3d(
+    config,
+    n_fluid: int = 6000,
+    n_wall: int = 1200,
+    n_frames: int = 16,
+    seed: int = 0,
+    with_valve: bool = False,
+    mitral_fraction: float = 0.35,
+    dtype: torch.dtype = torch.float64,
+) -> IBFEFrames:
+    """Produce a 3D :class:`IBFEFrames` bundle from the volume-preserving
+    ellipsoid ground truth (:class:`~pinnecho.data.synthetic_lv_3d.SyntheticLV3D`).
+
+    Fields, wall velocity, wall traction (``sigma . n`` from the exact ``(u, p)``)
+    and body forcing all come from the NS-exact 3D synthetic field, so the real
+    3D ``load_ibfe_output`` path can be developed against the identical interface.
+    ``with_valve`` behaves as in :func:`synthetic_ibfe_frames`.
+    """
+    import numpy as np
+
+    from .synthetic_lv_3d import SyntheticLV3D
+    from ..physics import operators as ops
+
+    lv = SyntheticLV3D(config.geometry, config.flow, dtype=dtype)
+    rng = np.random.default_rng(seed)
+    t_values = np.linspace(0.0, config.flow.period, n_frames)
+
+    coords_fluid = lv.sample_interior(n_fluid, t_values, rng).to(dtype)
+    fields = lv.all_fields(coords_fluid)
+    velocity_fluid = torch.cat([fields["u"], fields["v"], fields["w"]], dim=1)
+    pressure_fluid = fields["p"]
+    forcing_fluid = fields["forcing"]
+
+    wall = lv.sample_wall(n_wall, t_values, rng)
+    coords_wall = wall["X"].to(dtype)
+    normals_wall = wall["normal"].to(dtype)
+    velocity_wall = wall["wall_velocity"].to(dtype)
+
+    # Fluid Cauchy traction t = (-p I + mu (grad u + grad u^T)) . n at the wall.
+    Xg = coords_wall.clone().requires_grad_(True)
+    uvw = lv._velocity_from_graph(Xg)
+    p = lv.pressure(Xg)
+    grads = [ops.grad(uvw[:, i:i + 1], Xg) for i in range(3)]
+    traction_cols = []
+    for i in range(3):
+        # row i of sigma dotted with n
+        ti = -p * normals_wall[:, i:i + 1]
+        for j in range(3):
+            sij = grads[i][:, j:j + 1] + grads[j][:, i:i + 1]
+            ti = ti + config.flow.viscosity * sij * normals_wall[:, j:j + 1]
+        traction_cols.append(ti)
+    traction_wall = torch.cat(traction_cols, dim=1).detach()
+
+    coords_mitral = torch.zeros(0, 4, dtype=dtype)
+    velocity_mitral = torch.zeros(0, 3, dtype=dtype)
+    if with_valve:
+        coords_mitral, velocity_mitral = _mitral_patch(
+            coords_wall, velocity_wall, spatial_dim=3, fraction=mitral_fraction)
+
+    return IBFEFrames(
+        coords_fluid=coords_fluid, velocity_fluid=velocity_fluid,
+        pressure_fluid=pressure_fluid, forcing_fluid=forcing_fluid,
+        coords_wall=coords_wall, normals_wall=normals_wall,
+        velocity_wall=velocity_wall, traction_wall=traction_wall,
+        coords_mitral=coords_mitral, velocity_mitral=velocity_mitral,
+        coords_aortic=torch.zeros(0, 4, dtype=dtype),
+        velocity_aortic=torch.zeros(0, 3, dtype=dtype),
+        cycle_period=float(config.flow.period),
+        rho=float(config.flow.density), mu=float(config.flow.viscosity),
+        spatial_dim=3,
     )

@@ -1,0 +1,40 @@
+# =============================================================================
+# IBAMR/IBFE export manifest -- TEMPLATE
+# =============================================================================
+# Copy this file next to your exported per-frame CSVs and edit the values.
+# PINNecho loads it via `pinnecho.data.load_ibfe_output.load_ibfe_output(path)`
+# (pass the directory, or this manifest.yaml directly). See
+# `pinnecho/data/ibfe_io.py::load_ibfe_manifest` for the authoritative contract,
+# and run `scripts/make_example_ibfe_export.py` to emit a filled-in example.
+#
+# Units are SI throughout: metres, seconds, m/s, Pa, N/m^3.
+# Coordinate columns are spatial-first; the per-frame time is taken from `t`.
+# CSV columns are matched by HEADER NAME (order-independent; extra cols ignored).
+# For 3D, set spatial_dim: 3 and add the `z`/`w`/`nz`/`ww`/`tz`/`fz` columns.
+# -----------------------------------------------------------------------------
+
+spatial_dim: 2          # 2 or 3
+cycle_period: 0.9       # one cardiac cycle length [s] (for periodicity)
+rho: 1060.0             # blood density [kg/m^3] used by the FSI solver
+mu: 0.0035              # blood dynamic viscosity [Pa*s]
+
+# One entry per exported time frame over a single cardiac cycle.
+frames:
+  - t: 0.00
+    # Fluid volume (Eulerian interior) -- HELD-OUT ground truth + collocation.
+    #   columns: x,y[,z], u,v[,w], p, fx,fy[,fz]
+    #   (fx,fy[,fz] = net structure->fluid body force = the FSI forcing term)
+    fluid:  frames/fluid_000.csv
+    # Fluid-structure interface (endocardium).
+    #   columns: x,y[,z], nx,ny[,nz], uw,vw[,ww], tx,ty[,tz]
+    #   (uw..= FSI structural wall velocity; tx..= structural traction sigma.n)
+    wall:   frames/wall_000.csv
+    # OPTIONAL valves. Provide `mitral` to enable residence-time c=0 reinit.
+    #   columns: x,y[,z], u,v[,w]
+    mitral: frames/mitral_000.csv
+    # aortic: frames/aortic_000.csv
+  - t: 0.11
+    fluid:  frames/fluid_001.csv
+    wall:   frames/wall_001.csv
+    mitral: frames/mitral_001.csv
+  # ... one entry per frame ...

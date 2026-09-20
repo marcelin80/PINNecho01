@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **62 passing** (`pytest`)
+> 테스트: **66 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -13,12 +13,13 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 - **입력**: 희소하고 잡음이 있으며 **빔 방향 성분만** 측정되는 도플러 유사 속도 데이터.
 - **출력**: 전체 속도장, 압력, 와도, 벽 전단응력(WSS), (실데이터 확보 시) 잔류시간.
-- **핵심 과학 질문**: Navier–Stokes 백본에 심장 **유체-구조 상호작용(FSI)** 정보를
-  더하면, 운동학적 no-slip 기반 기존 방법(AI-VFM, iVFM-PINN, CSF-PINN) 대비
-  **속도 구배량(와도·WSS)과 압력** 복원이 개선되는가? → **현 합성 설정에서는 미확정.**
-  대조 실험 결과, 압력 이득은 경계 주입에 따른 (거의 순환적인) 산물이고, 구배량 이득의
-  상당 부분은 baseline의 인위적 노이즈에서 비롯됨이 확인됨. 자세한 내용과 재설계 권고는
-  [`docs/ABLATIONS.md`](ABLATIONS.md) 참조.
+- **핵심 과학 질문(원안)**: FSI 정보로 **압력·구배량** 복원이 개선되는가? → **압력에 관한 한
+  주장 기각.** 대조 실험 결과 압력 이득은 경계 압력 주입(순환, `corr(f,∇p)=0.95`) + 관측 부족의
+  하류 증상임이 확인됨.
+- **재정의된 질문(더 견고)**: **관측성 vs 물리 사전지식 — 서로 다른 병목.** 다중 음향창은
+  속도장/교차빔 관측을, FSI 물리는 구배량(와도·WSS)을 개선하며, 단일창+FSI가 2창 baseline의
+  구배 성능을 상회함(대체 가능성은 물리량 의존적). 전체 분석·수치·재설계 권고:
+  [`docs/ABLATIONS.md`](ABLATIONS.md).
 - **Stage 1 범위**: 실제 환자·에코 데이터 없음. IBAMR/IBFE 파이프라인 출력을 모사한
   **해석적·자기일관(divergence-free, exact no-slip, NS-exact) 합성 지상진값** 위에서 검증.
 
@@ -95,7 +96,18 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
   기존에 커 보인 WSS 개선폭은 대부분 **noisy vs exact 벽** 차이였다.
 - **traction 섭동 스트레스 테스트**: ε=20%에도 pressure corr 0.98 유지(스케일 불변 지표라
   둔감), 크기 지표 relL2만 0.17→0.21(~24%) 악화.
-- 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료 `docs/results/ablations.json`.
+
+**추가 대조 실험(point 1·2 검증):**
+- **Check 0 (순환성 게이트)**: `corr(forcing, ∇p)=0.95`, ∇p가 forcing 크기의 94% → 현 forcing은
+  사실상 압력 그라디언트. 재설계 검증의 정량 게이트(`--which coupling`).
+- **Ablation 3 (압력=관측 부족의 하류 증상)**: baseline+정확 벽에서 음향창 1→3으로 늘리면 교차빔
+  `u` 0.96→0.67, pressure corr −0.04→0.30 동반 개선(결합 −0.67). 압력 실패는 "물리항 부재"가
+  아니라 단일창 관측 부족 탓.
+- **Ablation 4 (관측 vs 물리 대체, 비순환)**: 속도/교차빔은 2번째 창이 압도(대체 불가)하나,
+  구배량은 `w1_forcing`이 `w2_baseline`을 상회(와도 0.78 vs 0.76, WSS 0.66 vs 0.56) → 물리는
+  구배 병목, 다중창은 속도 병목을 각각 공략.
+- 전체 표·해석·권고: **[`docs/ABLATIONS.md`](ABLATIONS.md)**, 원자료
+  `docs/results/ablations_all.json`(전체) · `docs/results/ablations.json`(초기 2종).
 - (참고) 초기 단일시드 비교 원자료: `docs/results/stage2_forcing.json`,
   `docs/results/stage2_traction.json`.
 
@@ -146,7 +158,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (62 passing)
+## 6. 테스트 현황 (66 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -195,11 +207,14 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 ## 9. 다음 단계 제안 (대조 실험 반영, 우선순위 순)
 
 1. **Model B 물리 기여 재설계** — traction으로 `p`를 주입하는 대신, **압력과 독립적으로
-   유도되는 능동수축 파라미터 기반 체적력**으로 FSI 기여를 재정의해 순환성 없이 우위를
-   재검증. 손실 항·어댑터·ablation 하네스는 그대로 재사용(`pinnecho.train.ablation`).
+   유도되는 능동수축 파라미터 기반 체적력**으로 FSI 기여를 재정의. **검증 첫 게이트는
+   `pinnecho.train.ablation --which coupling`** (`corr(f,∇p)`가 낮아야 함). 단, Check 0의
+   이론적 한계(exact 해에서 비회전 forcing=∇p) 때문에 forcing을 더 solenoidal/국소적으로
+   만드는 방향으로만 가능. 손실 항·어댑터·ablation 하네스 재사용.
 2. **실제로 푼 FSI 지상진값 확보** — manufactured solution 대신 실제 IBAMR/IBFE 출력(traction이
-   추정량)으로 넘어가 순환성을 원천 제거. 프레임 1주기를 NPZ/매니페스트로 내보내
-   `validate_ibfe_frames`로 계약 확인 → 동일 frames로 `train_ibfe`를 A/B 실행.
+   추정량)으로 넘어가 순환성을 원천 제거. **단 IBAMR 실행 환경(접근/컴퓨팅) 미확보** →
+   당분간 1번(파라메트릭 forcing) 경로 우선. 확보 시 프레임 1주기를 NPZ/매니페스트로 내보내
+   `validate_ibfe_frames`로 계약 확인 → `train_ibfe`로 A/B 실행.
 3. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 에코 윤곽추적 오차로 보정하고,
    `A_exact`를 공정 기준선으로 병기.
 4. **관측성 논점 우선 활용** — §4.2(다중 윈도우 병목)는 순환성과 무관하게 견고하므로

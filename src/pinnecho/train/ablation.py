@@ -43,9 +43,11 @@ single-seed artefact.
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple
 
+import numpy as np
 import torch
 
 from .train import (
@@ -55,6 +57,24 @@ from .train import (
     make_toy_batch_builder,
     train_model,
 )
+
+# Complementary acoustic windows used when a run requests >1 window (apical
+# default + parasternal-like + a third oblique view), matching the observability
+# sweep's convention so cross-beam observability improves with window count.
+SECOND_WINDOW = (0.07, -0.02)
+THIRD_WINDOW = (-0.07, -0.02)
+
+
+def _apply_windows(config, n_windows: int):
+    """Return a config copy whose Doppler acquisition uses ``n_windows`` views."""
+    cfg = copy.deepcopy(config)
+    d = cfg.doppler
+    extra = [SECOND_WINDOW, THIRD_WINDOW]
+    if n_windows <= 1:
+        d.transducers = ()
+    else:
+        d.transducers = tuple([d.transducer] + extra[: n_windows - 1])
+    return cfg
 
 
 # Metrics we summarise (lower is better unless it ends in ``_corr``).
@@ -223,6 +243,136 @@ def run_traction_perturbation(config, *, seeds: Sequence[int] = (0, 1),
     return {key: _aggregate(rows) for key, rows in per_level.items()}
 
 
+def _pearson(a: Sequence[float], b: Sequence[float]) -> float:
+    """Pearson correlation between two 1-D sequences (nan-safe, 0 if degenerate)."""
+    x = np.asarray(a, dtype=float)
+    y = np.asarray(b, dtype=float)
+    m = np.isfinite(x) & np.isfinite(y)
+    x, y = x[m], y[m]
+    if x.size < 2:
+        return float("nan")
+    x = x - x.mean()
+    y = y - y.mean()
+    denom = np.linalg.norm(x) * np.linalg.norm(y)
+    return float(x @ y / denom) if denom > 1e-12 else 0.0
+
+
+def forcing_pressure_coupling(config, seed: int = 0, n: int = 4000) -> Dict[str, float]:
+    """Quantify how much the synthetic FSI forcing *is* the pressure gradient.
+
+    The manufactured forcing is ``f = rho Du/Dt + grad p - mu lap u``. Splitting
+    off the pressure-free inertial/viscous part ``g = f - grad p`` lets us measure
+    the alignment of ``f`` with ``grad p`` (the circularity), the alignment of the
+    residual ``g`` with ``grad p`` (what is left once the explicit gradient is
+    removed), and the magnitude share ``||grad p|| / ||f||``.
+
+    This is the **gate for any Model-B redesign**: a genuinely pressure-independent
+    forcing must drive ``corr(f, grad p)`` and the gradient fraction down. NOTE the
+    theoretical ceiling: for an *exact* incompressible manufactured solution the
+    irrotational part of ``f`` equals ``grad p`` by the momentum equation, so this
+    coupling cannot be removed while keeping a nontrivial recoverable pressure --
+    it can only be reduced by making the forcing more solenoidal / localised.
+    """
+    from ..data.synthetic_lv import SyntheticLVFSI
+    from ..physics import operators as ops
+
+    dtype = torch.get_default_dtype()
+    lv = SyntheticLVFSI(config.geometry, config.flow, dtype=dtype)
+    rng = np.random.default_rng(seed)
+    t_values = np.linspace(0.0, config.flow.period, 24)
+    X = lv.sample_interior(n, t_values, rng).to(dtype).requires_grad_(True)
+    gradp = ops.grad(lv.pressure(X), X)[:, :2].detach()
+    f = lv.forcing(X).detach()
+    g = f - gradp
+    return {
+        "corr_forcing_gradp": _pearson(f.reshape(-1), gradp.reshape(-1)),
+        "corr_inertialviscous_gradp": _pearson(g.reshape(-1), gradp.reshape(-1)),
+        "gradp_magnitude_fraction": float(
+            (gradp.norm() / f.norm().clamp_min(1e-12))),
+        "forcing_rms": float(f.pow(2).mean().sqrt()),
+        "gradp_rms": float(gradp.pow(2).mean().sqrt()),
+    }
+
+
+def run_pressure_observability(config, *, seeds: Sequence[int] = (0, 1, 2),
+                               windows: Sequence[int] = (1, 2, 3),
+                               steps: int = 2500, lbfgs_iters: int = 200,
+                               lr: float = 2e-3, verbose: bool = True,
+                               ) -> Tuple[Dict[str, Dict[str, Tuple[float, float]]],
+                                          Dict[str, float]]:
+    """Is the ``A_exact`` pressure failure a *downstream symptom of observability*?
+
+    Runs the **baseline** backbone (no forcing, no traction) with the **exact**
+    wall velocity across increasing acoustic-window counts, so only the interior
+    velocity observability changes. Returns ``(per_window, coupling)`` where
+    ``per_window`` maps ``"windows=k" -> {metric: (mean, std)}`` and ``coupling``
+    reports the across-run Pearson correlation between the interior cross-beam
+    velocity error and the recovered pressure correlation. A strong (negative)
+    coupling means the pressure failure is inherited from the velocity field, not
+    from the missing physics term.
+    """
+    variant = Variant("A_exact", "baseline", "fsi",
+                      note="baseline + exact wall, no physics term")
+    per_window: Dict[str, List[Dict[str, float]]] = {}
+    runs: List[Dict[str, float]] = []
+    for w in windows:
+        cfg = _apply_windows(config, w)
+        key = f"windows={w}"
+        for seed in seeds:
+            dataset, lv = build_toy_dataset(cfg, seed=seed)
+            dataset.extras["_lv"] = lv
+            if verbose:
+                print(f"\n=== [seed {seed}] {key}: {variant.note} ===")
+            m = _run_variant(cfg, dataset, variant, steps=steps,
+                             lbfgs_iters=lbfgs_iters, lr=lr, seed=seed,
+                             verbose=verbose)
+            m = dict(m, n_windows=float(w))
+            per_window.setdefault(key, []).append(m)
+            runs.append(m)
+    coupling = {
+        "corr_velU_pressureCorr": _pearson(
+            [r["vel_relL2_u"] for r in runs], [r["pressure_corr"] for r in runs]),
+        "corr_velSpeed_pressureCorr": _pearson(
+            [r["vel_relL2_speed"] for r in runs], [r["pressure_corr"] for r in runs]),
+        "corr_velU_pressureRelL2": _pearson(
+            [r["vel_relL2_u"] for r in runs], [r["pressure_relL2"] for r in runs]),
+        "n_runs": float(len(runs)),
+    }
+    return {k: _aggregate(v) for k, v in per_window.items()}, coupling
+
+
+def run_observability_physics(config, *, seeds: Sequence[int] = (0, 1, 2),
+                              windows: Sequence[int] = (1, 2),
+                              steps: int = 2500, lbfgs_iters: int = 200,
+                              lr: float = 2e-3, verbose: bool = True,
+                              ) -> Dict[str, Dict[str, Tuple[float, float]]]:
+    """Can FSI forcing substitute for an extra acoustic window? (velocity/gradients)
+
+    Grid of ``windows x {baseline, fsi_forcing}`` with the **exact** wall for both
+    and **no traction** (so pressure is never injected -- this comparison is
+    non-circular and restricted to the velocity field and its gradients). The key
+    contrast is ``windows=1 + forcing`` vs ``windows=2 + baseline``. Returns a dict
+    keyed ``"w{n}_{baseline|forcing}" -> {metric: (mean, std)}``.
+    """
+    specs = [("baseline", "baseline", False), ("forcing", "fsi_informed", False)]
+    per_variant: Dict[str, List[Dict[str, float]]] = {}
+    for w in windows:
+        cfg = _apply_windows(config, w)
+        for tag, backbone, use_tr in specs:
+            v = Variant(f"w{w}_{tag}", backbone, "fsi", use_traction=use_tr,
+                        note=f"{w} window(s), {tag} (exact wall, no traction)")
+            for seed in seeds:
+                dataset, lv = build_toy_dataset(cfg, seed=seed)
+                dataset.extras["_lv"] = lv
+                if verbose:
+                    print(f"\n=== [seed {seed}] {v.name}: {v.note} ===")
+                m = _run_variant(cfg, dataset, v, steps=steps,
+                                 lbfgs_iters=lbfgs_iters, lr=lr, seed=seed,
+                                 verbose=verbose)
+                per_variant.setdefault(v.name, []).append(m)
+    return {k: _aggregate(v) for k, v in per_variant.items()}
+
+
 def _fmt_table(results: Dict[str, Dict[str, Tuple[float, float]]],
                metrics: Sequence[str] = KEY_METRICS) -> str:
     """Pretty ``mean+/-std`` table (rows = variants, cols = metrics)."""
@@ -251,15 +401,22 @@ def main() -> None:  # pragma: no cover - CLI wiring
     parser = argparse.ArgumentParser(
         description="FSI-backbone control ablations (synthetic data).")
     parser.add_argument("--config", default=None)
-    parser.add_argument("--which", choices=["isolation", "perturbation", "both"],
-                        default="both")
-    parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1])
+    parser.add_argument(
+        "--which",
+        choices=["isolation", "perturbation", "coupling", "pressure-obs",
+                 "substitution", "both", "all"],
+        default="both",
+        help="which experiment(s) to run ('both'=isolation+perturbation, "
+             "'all'=every experiment)")
+    parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     parser.add_argument("--steps", type=int, default=2500)
     parser.add_argument("--lbfgs-iters", type=int, default=200)
     parser.add_argument("--lr", type=float, default=2e-3)
     parser.add_argument("--levels", type=float, nargs="+",
                         default=[0.0, 0.05, 0.10, 0.20],
                         help="traction perturbation levels for the stress test")
+    parser.add_argument("--windows", type=int, nargs="+", default=[1, 2, 3],
+                        help="acoustic-window counts for the observability runs")
     parser.add_argument("--out", default=None, help="write ablations.json here")
     parser.add_argument("--dtype", choices=["float32", "float64"],
                         default="float64")
@@ -269,9 +426,26 @@ def main() -> None:  # pragma: no cover - CLI wiring
         torch.float64 if args.dtype == "float64" else torch.float32)
     config = load_config(args.config) if args.config else Config()
 
+    def want(name: str) -> bool:
+        if args.which == "all":
+            return True
+        if args.which == "both":
+            return name in ("isolation", "perturbation")
+        return args.which == name
+
     payload: Dict[str, dict] = {"seeds": list(args.seeds), "steps": args.steps}
 
-    if args.which in ("isolation", "both"):
+    # A cheap analytic check (no training): how circular is the current forcing?
+    if want("coupling") or args.which == "all":
+        coup = {s: forcing_pressure_coupling(config, seed=s) for s in args.seeds}
+        agg = _aggregate(list(coup.values()))
+        print("\n################ CHECK 0: forcing <-> pressure-gradient coupling "
+              "(circularity gate) ################")
+        for k, (mean, std) in agg.items():
+            print(f"  {k:32s} {mean:8.4f} +/- {std:5.3f}")
+        payload["coupling"] = {k: list(v) for k, v in agg.items()}
+
+    if want("isolation"):
         iso = run_physics_isolation(
             config, seeds=args.seeds, steps=args.steps,
             lbfgs_iters=args.lbfgs_iters, lr=args.lr)
@@ -281,7 +455,7 @@ def main() -> None:  # pragma: no cover - CLI wiring
         payload["isolation"] = {k: {m: list(v) for m, v in r.items()}
                                 for k, r in iso.items()}
 
-    if args.which in ("perturbation", "both"):
+    if want("perturbation"):
         pert = run_traction_perturbation(
             config, seeds=args.seeds, levels=args.levels, steps=args.steps,
             lbfgs_iters=args.lbfgs_iters, lr=args.lr)
@@ -290,6 +464,32 @@ def main() -> None:  # pragma: no cover - CLI wiring
         print(_fmt_table(pert))
         payload["perturbation"] = {k: {m: list(v) for m, v in r.items()}
                                    for k, r in pert.items()}
+
+    if want("pressure-obs"):
+        pobs, coupling = run_pressure_observability(
+            config, seeds=args.seeds, windows=args.windows, steps=args.steps,
+            lbfgs_iters=args.lbfgs_iters, lr=args.lr)
+        print("\n################ ABLATION 3: pressure recovery vs velocity "
+              "observability (baseline, exact wall) ################")
+        print(_fmt_table(pobs))
+        print("\n  across-run coupling (Pearson):")
+        for k, v in coupling.items():
+            print(f"    {k:28s} {v:8.4f}")
+        payload["pressure_obs"] = {
+            "per_window": {k: {m: list(v) for m, v in r.items()}
+                           for k, r in pobs.items()},
+            "coupling": coupling,
+        }
+
+    if want("substitution"):
+        sub = run_observability_physics(
+            config, seeds=args.seeds, windows=[w for w in args.windows if w <= 2],
+            steps=args.steps, lbfgs_iters=args.lbfgs_iters, lr=args.lr)
+        print("\n################ ABLATION 4: can FSI forcing substitute for an "
+              "acoustic window? (velocity/gradients, non-circular) ################")
+        print(_fmt_table(sub))
+        payload["substitution"] = {k: {m: list(v) for m, v in r.items()}
+                                   for k, r in sub.items()}
 
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)

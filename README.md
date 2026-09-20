@@ -312,13 +312,31 @@ is better, **↑** = higher is better):
 >
 > Run it yourself:
 > ```bash
-> python -m pinnecho.train.ablation --which both --seeds 0 1 2 \
+> python -m pinnecho.train.ablation --which all --seeds 0 1 2 --windows 1 2 3 \
 >     --steps 2500 --lbfgs-iters 200 --dtype float32 --out artifacts/ablations.json
 > ```
 
+**The more robust question that replaces it — observability vs. physics.** Two
+further ablations reframe the result into something non-circular and clinically
+meaningful (full analysis in [`docs/ABLATIONS.md`](docs/ABLATIONS.md)):
+
+* **Pressure is downstream of observability, not the missing physics term.** With
+  the baseline (no FSI) and an exact wall, going from 1→3 acoustic windows
+  improves the cross-beam velocity `u` (relL2 0.96→0.67) *and* pressure
+  correlation (−0.04→0.30) together (coupling −0.67). The `A_exact` pressure
+  failure is inherited from the unobserved cross-beam velocity.
+* **FSI physics and extra windows fix *different* bottlenecks.** A second acoustic
+  window dominates for the velocity field (forcing cannot substitute), but for the
+  **gradient** quantities a single window **+ FSI forcing beats two windows without
+  it** (vorticity corr 0.782 vs 0.764, WSS corr 0.659 vs 0.561) — and those are
+  exactly the quantities (vorticity, WSS) this project targets. So the defensible
+  framing is: *FSI priors don't replace an acoustic window in general, but they do
+  for the velocity-gradient quantities; the two are complementary.*
+
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
 [`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json),
-control ablations [`docs/results/ablations.json`](docs/results/ablations.json).
+control ablations [`docs/results/ablations_all.json`](docs/results/ablations_all.json)
+(comprehensive) and [`docs/results/ablations.json`](docs/results/ablations.json).
 
 > The table above uses a *coincident* wall velocity for A and B, so it isolates
 > the effect of the momentum forcing alone. Stage 2 (below) makes the wall

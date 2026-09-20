@@ -24,13 +24,16 @@ from .train import (
 from .evaluate_toy import evaluate_toy
 
 
-# A roughly complementary second acoustic window (parasternal-like), used when a
-# condition requests two windows. The primary window is the config default.
+# Roughly complementary extra acoustic windows (parasternal-like), used when a
+# condition requests >1 window. The primary window is the config default. These
+# match ``pinnecho.train.ablation`` so window counts are consistent across studies.
 SECOND_WINDOW = (0.07, -0.02)
+THIRD_WINDOW = (-0.07, -0.02)
 
 # Report these held-out metrics for every condition.
 REPORT_KEYS = ("vel_relL2_speed", "vel_relL2_u", "vel_relL2_v",
-               "vorticity_relL2", "wss_relL2", "pressure_relL2")
+               "vorticity_relL2", "wss_relL2", "pressure_relL2",
+               "pressure_corr", "vorticity_corr", "wss_corr")
 
 
 @dataclass
@@ -45,7 +48,11 @@ class SweepCondition:
         cfg = copy.deepcopy(config)
         d = cfg.doppler
         if self.n_windows is not None:
-            d.transducers = (d.transducer, SECOND_WINDOW) if self.n_windows >= 2 else ()
+            extra = [SECOND_WINDOW, THIRD_WINDOW]
+            if self.n_windows <= 1:
+                d.transducers = ()
+            else:
+                d.transducers = tuple([d.transducer] + extra[: self.n_windows - 1])
         if self.noise_level is not None:
             d.noise_level = float(self.noise_level)
         if self.n_points_per_frame is not None:
@@ -59,6 +66,7 @@ def default_conditions(base_windows: int = 1, base_noise: float = 0.05,
     conds = [
         SweepCondition("windows=1", n_windows=1),
         SweepCondition("windows=2", n_windows=2),
+        SweepCondition("windows=3", n_windows=3),
         SweepCondition("noise=0.02", noise_level=0.02),
         SweepCondition("noise=0.10", noise_level=0.10),
         SweepCondition("points=150", n_points_per_frame=150),
@@ -120,9 +128,12 @@ def run_sweep(config, conditions: Optional[Sequence[SweepCondition]] = None,
             if verbose:
                 print(f"[{cond.name} seed={s}] " + " ".join(
                     f"{k}={m.get(k, float('nan')):.3f}" for k in REPORT_KEYS))
-        rec = {"name": cond.name, "n_windows": cond.n_windows,
-               "noise_level": cond.noise_level, "snr_db": _snr_db(cond.noise_level),
-               "n_points_per_frame": cond.n_points_per_frame}
+        d = cfg.doppler
+        n_windows = len(d.transducers) if getattr(d, "transducers", ()) else 1
+        noise_level = float(d.noise_level)
+        rec = {"name": cond.name, "n_windows": n_windows,
+               "noise_level": noise_level, "snr_db": _snr_db(noise_level),
+               "n_points_per_frame": int(d.n_points_per_frame)}
         for k in REPORT_KEYS:
             vals = np.array([d.get(k, np.nan) for d in per_seed], dtype=float)
             rec[f"{k}_mean"] = float(np.nanmean(vals))

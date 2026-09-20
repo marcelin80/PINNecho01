@@ -27,3 +27,15 @@ def test_run_sweep_tiny(tmp_path):
         assert "vel_relL2_speed_mean" in r and r["snr_db"] > 0
     p = plot_sweep(recs, tmp_path / "sweep.png", metric="vel_relL2_speed")
     assert p.exists() and p.stat().st_size > 0
+
+
+def test_window_counts_including_three():
+    torch.set_default_dtype(torch.float32)
+    cfg = Config()
+    conds = [SweepCondition("w1", n_windows=1, noise_level=0.05, n_points_per_frame=120),
+             SweepCondition("w2", n_windows=2, noise_level=0.05, n_points_per_frame=120),
+             SweepCondition("w3", n_windows=3, noise_level=0.05, n_points_per_frame=120)]
+    recs = run_sweep(cfg, conditions=conds, backbone="baseline",
+                     steps=10, lbfgs_iters=0, seeds=(0,), use_traction=False,
+                     verbose=False)
+    assert [r["n_windows"] for r in recs] == [1, 2, 3]

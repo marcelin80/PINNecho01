@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pinnecho"
+version = "0.1.0"
+description = "FSI-informed physics-informed neural network for intraventricular Doppler flow reconstruction (Stage 1, synthetic data)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "PINNecho contributors" }]
+keywords = [
+    "physics-informed-neural-network",
+    "cardiac",
+    "fluid-structure-interaction",
+    "doppler",
+    "vector-flow-mapping",
+    "left-ventricle",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "torch>=2.0",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+viz = ["imageio>=2.31", "pillow>=9.5"]
+
+[project.scripts]
+pinnecho-generate = "pinnecho.cli:generate_main"
+pinnecho-train = "pinnecho.cli:train_main"
+pinnecho-evaluate = "pinnecho.cli:evaluate_main"
+pinnecho-compare = "pinnecho.cli:compare_main"
+# Spec-aligned toy-case drivers (modular Stage-1/2 build).
+pinnecho-train-a = "pinnecho.train.train:main"
+pinnecho-compare-ab = "pinnecho.train.train:compare_main"
+pinnecho-visualize = "pinnecho.train.train:visualize_main"
+pinnecho-sweep = "pinnecho.train.observability:sweep_main"
+pinnecho-train-3d = "pinnecho.train.train3d:main"
+pinnecho-ablation = "pinnecho.train.ablation:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

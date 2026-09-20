@@ -1,0 +1,61 @@
+# Backbone A -- BASELINE: generic incompressible Navier-Stokes with a purely
+# kinematic no-slip wall boundary condition (wall velocity from the moving
+# endocardial contour). No body forcing is assumed (f = 0). Mirrors AI-VFM /
+# iVFM-PINN / CSF-PINN.
+experiment: baseline
+seed: 0
+device: cpu
+
+geometry:
+  r0_x: 0.020
+  r0_y: 0.030
+  strain_amplitude: 0.18
+
+flow:
+  period: 0.9
+  vortex_strength: 0.35
+  inflow_strength: 0.25
+  pressure_amplitude: 400.0
+  density: 1060.0
+  viscosity: 0.0035
+
+doppler:
+  # Two acoustic windows (apical-like), single-component per measurement.
+  transducers: [[-0.055, -0.045], [0.055, -0.045]]
+  n_points_per_frame: 600
+  n_frames: 10
+  noise_level: 0.02
+  seed: 0
+
+collocation:
+  n_interior: 4500
+  n_wall: 800
+  n_frames: 12
+
+model:
+  hidden_width: 128
+  hidden_depth: 5
+  activation: tanh
+  fourier_features: 0        # plain tanh -> smooth derivatives (vorticity/WSS)
+  output_pressure: true
+
+physics:
+  backbone: baseline
+  forcing_scale: 1.0
+  enforce_continuity: true
+
+train:
+  iterations: 4000
+  lr: 0.002
+  lr_decay: 0.5
+  lr_decay_every: 2000
+  physics_warmup_frac: 0.35
+  lbfgs_iters: 500
+  batch_interior: 2048
+  batch_wall: 512
+  log_every: 500
+  weights:
+    data: 10.0
+    continuity: 20.0
+    momentum: 5.0
+    wall: 10.0

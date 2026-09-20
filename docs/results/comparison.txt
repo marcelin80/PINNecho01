@@ -1,0 +1,7 @@
+metric                            baseline    fsi_informed     improvement
+--------------------------------------------------------------------------
+rel_l2_speed                        0.4338          0.4582           -5.6%
+rel_l2_pressure                     1.0305          3.0866         -199.5%
+rel_l2_vorticity                    0.5853          0.5413            7.5%
+rel_l2_wss                          0.5984          0.5795            3.2%
+rel_l2_residence_time               0.2904          0.3482          -19.9%

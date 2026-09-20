@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "vel_relL2_u": 0.6807419177996676,
+    "vel_relL2_v": 0.5237677681817908,
+    "vel_relL2_speed": 0.4559057212033897,
+    "pressure_relL2": 0.8268592136961472,
+    "pressure_corr": 0.6662476479160166,
+    "vorticity_relL2": 0.585081202138038,
+    "vorticity_corr": 0.8109698494576112,
+    "wss_relL2": 0.5157106422041708,
+    "wss_corr": 0.6651086654723171,
+    "baseline_beam_relL2": 1.0589289375358324
+  },
+  "fsi_informed": {
+    "vel_relL2_u": 0.6587972952505772,
+    "vel_relL2_v": 0.4940929401378503,
+    "vel_relL2_speed": 0.4516745817049488,
+    "pressure_relL2": 0.105022117554928,
+    "pressure_corr": 0.9954790313170518,
+    "vorticity_relL2": 0.5484765285934204,
+    "vorticity_corr": 0.8363622623536329,
+    "wss_relL2": 0.4874333219298858,
+    "wss_corr": 0.6802687046149068,
+    "baseline_beam_relL2": 1.0589289375358324
+  }
+}

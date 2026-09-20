@@ -19,6 +19,10 @@ question:
 This directly targets a weakness that CSF-PINN (Wong et al. 2025) reported in
 their own paper: poor recovery of vorticity and wall shear stress (WSS).
 
+> **Project status.** For a single-page summary of what is implemented, the
+> latest results, entry points, test coverage and remaining (data-gated) work,
+> see [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+
 > **Stage 1 scope.** No real patient data or clinical echo access is available
 > yet. Everything here runs on **synthetic** data that mimics the output of an
 > existing IBAMR/IBFE cardiac FSI pipeline. The synthetic ground truth is

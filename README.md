@@ -399,11 +399,29 @@ python scripts/observability_sweep.py --dtype float32 --steps 1800 --seeds 0 1 \
 
 It writes `sweep.json` and per-metric bar charts (`sweep_vel_relL2_speed.png`,
 `sweep_vel_relL2_v.png`, `sweep_wss_relL2.png`) under
-[`docs/results/observability/`](docs/results/observability). The dominant lever
-is the number of windows (a second, angled window most improves the cross-beam
-`v` component); noise and sparsity have a smaller effect in this regime, and
-velocity error is ultimately floor-limited by the short CPU training budget used
-for the sweep rather than by the acquisition alone.
+[`docs/results/observability/`](docs/results/observability).
+
+Reference sweep (Model B, fsi_informed + traction; 1800 Adam + 200 L-BFGS steps,
+float32, CPU; relative L2, ↓):
+
+| condition | SNR (dB) | windows | pts/frame | speed | `u` | `v` | vorticity | WSS | pressure |
+|---|---|---|---|---|---|---|---|---|---|
+| **windows=1** | 26 | 1 | 300 | 0.568 | 0.969 | 0.564 | 0.711 | 0.741 | 0.219 |
+| **windows=2** | 26 | 2 | 300 | **0.555** | **0.815** | 0.579 | 0.714 | **0.725** | **0.172** |
+| noise=0.02 | 34 | 1 | 300 | 0.569 | 0.972 | 0.563 | 0.715 | 0.744 | 0.221 |
+| noise=0.10 | 20 | 1 | 300 | 0.574 | 0.968 | 0.582 | 0.729 | 0.756 | 0.228 |
+| points=150 | 26 | 1 | 150 | 0.573 | 0.972 | 0.545 | 0.714 | 0.755 | 0.232 |
+| points=600 | 26 | 1 | 600 | 0.562 | 0.972 | 0.564 | 0.721 | 0.743 | 0.229 |
+
+**The dominant lever is angular coverage, not noise or density.** The primary
+(apical) window's beam is nearly aligned with `y`, so it observes `v` well
+(relL2 0.56) but the cross-beam `u` component barely at all (relL2 **0.97**).
+Adding a second, angled window collapses the `u` error to **0.815** and improves
+speed, WSS and pressure — whereas varying SNR across 20–34 dB or sampling density
+across 150–600 pts/frame changes every metric by only ~1–2%. This quantifies the
+single-component **observability bottleneck**: the reconstruction is limited by
+*how many directions are measured*, and the physics prior fills the rest.
+Raw numbers: [`docs/results/observability/sweep.json`](docs/results/observability/sweep.json).
 
 ### 3D end-to-end validation
 

@@ -29,6 +29,10 @@ class GeometryConfig:
     strain_amplitude: float = 0.18
     center_x: float = 0.0
     center_y: float = 0.0
+    # 3D extension (apex-base long axis). Ignored by the 2D synthetic LV; used by
+    # the 3D synthetic generator, which keeps the ellipsoid *volume* constant.
+    r0_z: float = 0.040
+    center_z: float = 0.0
 
 
 @dataclass

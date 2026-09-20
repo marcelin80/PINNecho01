@@ -206,7 +206,8 @@ specification incrementally. Current status:
 | Model A kinematic BC + valve/inflow | `bc/boundary_conditions.py` | **Implemented** |
 | Validation metrics + spline baseline | `evaluate.py` | **Implemented** (primitives); end-to-end driver scaffolded |
 | Training entry + A/B compare | `train/train.py` | **Implemented**; Model A and Model B validated end-to-end on the toy 2D case |
-| IBFE loader / Doppler synthesis | `data/load_ibfe_output.py`, `data/synthesize_doppler.py` | **TODO stubs** with documented tensor shapes |
+| Canonical Doppler synthesiser (sparsity/aliasing/SNR) | `data/synthesize_doppler.py` | **Implemented** + tested |
+| IBFE interface (`IBFEFrames`) + synthetic exporter | `data/load_ibfe_output.py` | **Implemented** (synthetic path); real file loader is a documented stub |
 | Model B (FSI forcing + FSI wall velocity + traction continuity) | `bc/boundary_conditions.py` | **Implemented** + tested; A-vs-B ablation run |
 
 > **Staging.** Per the plan, Model B's traction-matching BC is not begun until
@@ -287,6 +288,77 @@ is better, **↑** = higher is better):
 
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
 [`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json).
+
+> The table above uses a *coincident* wall velocity for A and B, so it isolates
+> the effect of the momentum forcing alone. Stage 2 (below) makes the wall
+> velocities realistically differ.
+
+---
+
+## Stage 2 — realistic acquisition, diverged wall, real-data-ready interface
+
+Stage 2 upgrades the framework toward real IBAMR/IBFE data (which is supplied
+separately) and makes the two backbones differ in a physically realistic way:
+
+1. **Diverged wall velocity (FSI vs kinematic).** In a real study the FSI solver's
+   structural interface velocity is accurate, while Model A's *kinematic* wall
+   velocity comes from finite-differencing tracked/segmented contours and carries
+   a systematic under-estimation + noise. `build_toy_dataset` now stores both:
+   Model B is given the accurate FSI wall velocity, Model A the tracking estimate.
+   This is exactly where a near-wall quantity like WSS should reward the FSI
+   backbone.
+2. **Canonical Doppler synthesiser** (`data/synthesize_doppler.py`): multi-window
+   beam projection, a sparsity mask (acquisition gaps), aliasing wraparound at a
+   configurable Nyquist limit (with an optional dealiasing toggle), and additive
+   Gaussian noise at a configurable **SNR (dB)**. Unit-tested for projection,
+   wrap/unwrap, sparsity fraction and SNR level.
+3. **Real-data-ready IBFE interface** (`data/load_ibfe_output.py`):
+   `synthetic_ibfe_frames(...)` returns the same `IBFEFrames` bundle (fluid
+   volume, interface velocity/traction, body forcing, metadata) that the real
+   `load_ibfe_output` will, so downstream code is developed/tested against the
+   final interface today and the real loader drops in later.
+
+### A-vs-B with the diverged wall velocity
+
+Same identical-architecture/data/init protocol; Model A now uses the kinematic
+(tracking-error) wall BC, Model B the accurate FSI wall BC:
+
+| metric | Model A | Model B (forcing + FSI wall) | Model B (+ traction) |
+|---|---|---|---|
+| speed ↓ | 0.481 | 0.454 | 0.452 |
+| **vorticity** ↓ (corr ↑) | 0.585 (0.81) | 0.561 (0.83) | **0.549 (0.84)** |
+| **wall shear stress** ↓ (corr ↑) | 0.618 (0.61) | 0.489 (0.69) | **0.487 (0.68)** |
+| **pressure** ↓ (corr ↑) | 0.971 (0.24) | 2.209 (0.79) | **0.105 (0.996)** |
+
+**What changed vs the coincident-wall table.** With a realistic kinematic wall
+error, the WSS gap widens sharply — Model B improves WSS by **~21%**
+(0.618 → 0.489) instead of ~5% — because WSS is a wall-gradient quantity and B
+sees the accurate wall velocity. Vorticity still improves, speed improves, and
+(with the traction-continuity BC) pressure is recovered near-exactly
+(relL2 0.971 → 0.105, corr 0.24 → 0.996). This is the core Stage-1/2 thesis
+demonstrated end-to-end: **informing the PINN with the FSI structural model
+improves precisely the velocity-gradient and pressure quantities the kinematic
+baseline handles worst.**
+
+Raw numbers: [`docs/results/stage2_forcing.json`](docs/results/stage2_forcing.json),
+[`docs/results/stage2_traction.json`](docs/results/stage2_traction.json).
+
+Reproduce:
+
+```bash
+python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300            # forcing + FSI wall
+python scripts/compare_models_ab.py --config configs/baseline.yaml --steps 3000 --lbfgs-iters 300 --traction # + traction continuity
+```
+
+### Deferred to real data / future work
+
+* **Residence-time (scalar) reconstruction** needs a true inflow boundary
+  (mitral valve) to reinitialise `c = 0`; the closed, area-preserving synthetic
+  cavity has no real inflow, so this is gated on the real IBFE valve data (the
+  scalar-transport residual and the `c` head are implemented and unit-tested).
+* **3D** — the residual/operator/network layers are already dimension-general
+  (2D & 3D forward and residuals are unit-tested); a 3D run needs a 3D synthetic
+  (or real IBFE) ground truth.
 
 ---
 

@@ -126,11 +126,20 @@ def input_bounds(geometry, flow, pad: float = 1.15):
     return lows, highs
 
 
-def build_toy_dataset(config):
+def build_toy_dataset(config, wall_tracking_bias: float = -0.08,
+                      wall_tracking_noise: float = 0.10, seed: int = 0):
     """Build the shared synthetic-LV dataset + generator (identical for A and B).
 
-    Also precomputes the true fluid-interface traction at the wall points, used
-    as the FSI structural-traction target for the traction-continuity BC.
+    Precomputes, at the wall points:
+    * the true fluid-interface traction (structure == fluid for the exact
+      synthetic solution) -- the traction-continuity target;
+    * ``wall_velocity_fsi``  -- the accurate FSI structural wall velocity (== the
+      true endocardial velocity of the manufactured field), used by Model B;
+    * ``wall_velocity_kin``  -- a contour-tracking estimate of the wall velocity
+      corrupted by a systematic bias + noise (segmentation / finite-difference of
+      tracked contours typically *under*-estimates peak wall speed), used by
+      Model A. This makes the kinematic-vs-FSI wall BC distinction real rather
+      than coincident, as in the true FSI setting.
     """
     from ..data.dataset import build_dataset
     from ..data.synthetic_lv import SyntheticLVFSI
@@ -140,14 +149,21 @@ def build_toy_dataset(config):
     lv = SyntheticLVFSI(config.geometry, config.flow, dtype=dtype)
     dataset = build_dataset(config, lv=lv, dtype=dtype)
 
-    # True interface traction (structure == fluid at the interface for the exact
-    # synthetic solution) as the traction-continuity target.
     Xg = dataset.wall_X.clone().requires_grad_(True)
     uv = lv._velocity_from_graph(Xg)
     p = lv.pressure(Xg)
     t_true = fluid_traction_2d(uv[:, 0:1], uv[:, 1:2], p, Xg,
                               dataset.wall_normal, config.flow.viscosity).detach()
     dataset.extras["wall_traction"] = t_true
+
+    # Diverge the two wall velocities. FSI (true) vs kinematic (tracking error).
+    v_fsi = dataset.wall_velocity
+    rms = float(v_fsi.pow(2).mean().sqrt().clamp_min(1e-9))
+    g = torch.Generator().manual_seed(seed + 7)
+    noise = torch.randn(v_fsi.shape, generator=g, dtype=dtype) * (wall_tracking_noise * rms)
+    v_kin = v_fsi * (1.0 + wall_tracking_bias) + noise
+    dataset.extras["wall_velocity_fsi"] = v_fsi
+    dataset.extras["wall_velocity_kin"] = v_kin
     return dataset, lv
 
 
@@ -205,9 +221,20 @@ def build_toy_model_a(config, model_overrides: Optional[dict] = None):
 
 def make_toy_batch_builder(dataset, seed: int = 0,
                            n_data: int = 2048, n_col: int = 2048,
-                           n_wall: int = 512, with_traction: bool = False):
-    """Return a ``build_batches(step)`` closure that subsamples the fixed sets."""
+                           n_wall: int = 512, with_traction: bool = False,
+                           wall_target: str = "fsi"):
+    """Return a ``build_batches(step)`` closure that subsamples the fixed sets.
+
+    ``wall_target`` selects the wall-velocity BC target: ``"kinematic"`` (the
+    contour-tracking estimate, for Model A) or ``"fsi"`` (the accurate FSI wall
+    velocity, for Model B). Falls back to ``dataset.wall_velocity`` if the
+    diverged velocities are not present.
+    """
     g = torch.Generator().manual_seed(seed)
+    if wall_target == "kinematic":
+        u_wall_all = dataset.extras.get("wall_velocity_kin", dataset.wall_velocity)
+    else:
+        u_wall_all = dataset.extras.get("wall_velocity_fsi", dataset.wall_velocity)
 
     def _idx(n_total, n):
         if n >= n_total:
@@ -230,7 +257,7 @@ def make_toy_batch_builder(dataset, seed: int = 0,
             },
             "wall": {
                 "X": dataset.wall_X[wi].clone(),
-                "u_wall": dataset.wall_velocity[wi],
+                "u_wall": u_wall_all[wi],
             },
         }
         if with_traction and "wall_traction" in dataset.extras:
@@ -303,6 +330,7 @@ def compare_backbones_toy(config, steps: int = 3000, lbfgs_iters: int = 300,
         build_batches = make_toy_batch_builder(
             dataset, seed=seed,
             with_traction=(use_traction and backbone == "fsi_informed"),
+            wall_target="fsi" if backbone == "fsi_informed" else "kinematic",
         )
         cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                           log_every=max(1, steps // 6), seed=seed)

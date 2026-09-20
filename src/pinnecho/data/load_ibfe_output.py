@@ -111,6 +111,68 @@ def load_ibfe_output(
     raise NotImplementedError(
         "load_ibfe_output is a documented stub. Supply the IBFE export format "
         "and implement per the shapes in this module's docstring. For Stage-1 "
-        "development use pinnecho.data.synthetic_lv.SyntheticLVFSI as a "
-        "manufactured stand-in with the same interface."
+        "development use synthetic_ibfe_frames(...) below, which produces the "
+        "same IBFEFrames bundle from the manufactured synthetic-LV field."
+    )
+
+
+def synthetic_ibfe_frames(
+    config,
+    n_fluid: int = 4000,
+    n_wall: int = 800,
+    n_frames: int = 16,
+    seed: int = 0,
+    dtype: torch.dtype = torch.float64,
+) -> IBFEFrames:
+    """Produce an :class:`IBFEFrames` bundle from the synthetic-LV stand-in.
+
+    This exercises the exact interface a real IBAMR/IBFE loader will return, so
+    downstream code can be developed and tested against ``IBFEFrames`` now and
+    the real ``load_ibfe_output`` can be dropped in later. The fluid volume,
+    interface velocity/traction and body forcing come from the manufactured,
+    NS-exact synthetic field.
+
+    Valve arrays are returned empty (the closed area-preserving synthetic cavity
+    has no mitral/aortic openings); real IBFE output will populate them.
+    """
+    import numpy as np
+
+    from .synthetic_lv import SyntheticLVFSI
+    from ..bc.boundary_conditions import fluid_traction_2d
+
+    lv = SyntheticLVFSI(config.geometry, config.flow, dtype=dtype)
+    rng = np.random.default_rng(seed)
+    t_values = np.linspace(0.0, config.flow.period, n_frames)
+
+    # Fluid volume (held-out ground truth).
+    coords_fluid = lv.sample_interior(n_fluid, t_values, rng).to(dtype)
+    fields = lv.all_fields(coords_fluid)
+    velocity_fluid = torch.cat([fields["u"], fields["v"]], dim=1)
+    pressure_fluid = fields["p"]
+    forcing_fluid = fields["forcing"]
+
+    # Interface (endocardial wall).
+    wall = lv.sample_wall(n_wall, t_values, rng)
+    coords_wall = wall["X"].to(dtype)
+    normals_wall = wall["normal"].to(dtype)
+    velocity_wall = wall["wall_velocity"].to(dtype)  # FSI structural velocity
+    Xg = coords_wall.clone().requires_grad_(True)
+    uv = lv._velocity_from_graph(Xg)
+    traction_wall = fluid_traction_2d(
+        uv[:, 0:1], uv[:, 1:2], lv.pressure(Xg), Xg, normals_wall,
+        config.flow.viscosity,
+    ).detach()
+
+    empty3 = torch.zeros(0, 3, dtype=dtype)
+    empty2 = torch.zeros(0, 2, dtype=dtype)
+    return IBFEFrames(
+        coords_fluid=coords_fluid, velocity_fluid=velocity_fluid,
+        pressure_fluid=pressure_fluid, forcing_fluid=forcing_fluid,
+        coords_wall=coords_wall, normals_wall=normals_wall,
+        velocity_wall=velocity_wall, traction_wall=traction_wall,
+        coords_mitral=empty3, velocity_mitral=empty2,
+        coords_aortic=empty3, velocity_aortic=empty2,
+        cycle_period=float(config.flow.period),
+        rho=float(config.flow.density), mu=float(config.flow.viscosity),
+        spatial_dim=2,
     )

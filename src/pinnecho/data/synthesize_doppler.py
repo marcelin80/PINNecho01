@@ -70,43 +70,28 @@ def _noise_std_for_snr(clean: torch.Tensor, snr_db: float) -> float:
     return noise_power ** 0.5
 
 
-def synthesize_doppler(
-    coords_true: torch.Tensor,
-    velocity_true: torch.Tensor,
-    transducers: torch.Tensor,
-    v_nyquist: float = 0.8,
-    snr_db: float = 20.0,
-    sparsity: float = 0.5,
-    dealias: bool = False,
-    rng: Optional[torch.Generator] = None,
+def _finalize_measurements(
+    coords: torch.Tensor,
+    beam: torch.Tensor,
+    v_clean: torch.Tensor,
+    window_id: torch.Tensor,
+    v_nyquist: float,
+    snr_db: float,
+    sparsity: float,
+    dealias: bool,
+    rng: Optional[torch.Generator],
 ) -> DopplerMeasurements:
-    """Synthesise sparse, single-component, noisy Doppler measurements.
+    """Apply the common sparsity -> aliasing -> SNR-noise tail to pooled samples.
 
-    See the module docstring for the pipeline and tensor shapes. ``transducers``
-    is ``(K, dim)``; each point is measured by every window (stacked), then the
-    sparsity mask, aliasing and noise are applied to the pooled set.
+    Shared by :func:`synthesize_doppler` (every point seen by every window) and
+    :func:`~pinnecho.data.acquisition.synthesize_multiplane_doppler` (each view
+    only sees points inside its imaging plane). The RNG call order is
+    sparsity-mask first, then noise, so a fixed seed is reproducible across both.
     """
-    if transducers.dim() == 1:
-        transducers = transducers.unsqueeze(0)
-    dim = transducers.shape[1]
-    dtype = coords_true.dtype
-
-    coords_list, beam_list, vclean_list, win_list = [], [], [], []
-    for k in range(transducers.shape[0]):
-        beam = beam_directions(coords_true, transducers[k])
-        v_beam = (velocity_true[:, :dim] * beam).sum(dim=1, keepdim=True)
-        coords_list.append(coords_true)
-        beam_list.append(beam)
-        vclean_list.append(v_beam)
-        win_list.append(torch.full((coords_true.shape[0], 1), k, dtype=torch.long))
-
-    coords = torch.cat(coords_list, dim=0)
-    beam = torch.cat(beam_list, dim=0)
-    v_clean = torch.cat(vclean_list, dim=0)
-    window_id = torch.cat(win_list, dim=0)
+    dtype = coords.dtype
 
     # --- Sparsity mask (acquisition gaps) ---
-    if sparsity > 0.0:
+    if sparsity > 0.0 and coords.shape[0] > 0:
         u = torch.rand(coords.shape[0], generator=rng, dtype=dtype)
         keep = u >= sparsity
         if keep.sum() == 0:  # guard against dropping everything
@@ -129,4 +114,45 @@ def synthesize_doppler(
         v_beam=v_beam,
         window_id=window_id,
         v_beam_clean=v_clean,
+    )
+
+
+def synthesize_doppler(
+    coords_true: torch.Tensor,
+    velocity_true: torch.Tensor,
+    transducers: torch.Tensor,
+    v_nyquist: float = 0.8,
+    snr_db: float = 20.0,
+    sparsity: float = 0.5,
+    dealias: bool = False,
+    rng: Optional[torch.Generator] = None,
+) -> DopplerMeasurements:
+    """Synthesise sparse, single-component, noisy Doppler measurements.
+
+    See the module docstring for the pipeline and tensor shapes. ``transducers``
+    is ``(K, dim)``; each point is measured by every window (stacked), then the
+    sparsity mask, aliasing and noise are applied to the pooled set.
+    """
+    if transducers.dim() == 1:
+        transducers = transducers.unsqueeze(0)
+    dim = transducers.shape[1]
+
+    coords_list, beam_list, vclean_list, win_list = [], [], [], []
+    for k in range(transducers.shape[0]):
+        beam = beam_directions(coords_true, transducers[k])
+        v_beam = (velocity_true[:, :dim] * beam).sum(dim=1, keepdim=True)
+        coords_list.append(coords_true)
+        beam_list.append(beam)
+        vclean_list.append(v_beam)
+        win_list.append(torch.full((coords_true.shape[0], 1), k, dtype=torch.long))
+
+    coords = torch.cat(coords_list, dim=0)
+    beam = torch.cat(beam_list, dim=0)
+    v_clean = torch.cat(vclean_list, dim=0)
+    window_id = torch.cat(win_list, dim=0)
+
+    return _finalize_measurements(
+        coords, beam, v_clean, window_id,
+        v_nyquist=v_nyquist, snr_db=snr_db, sparsity=sparsity,
+        dealias=dealias, rng=rng,
     )

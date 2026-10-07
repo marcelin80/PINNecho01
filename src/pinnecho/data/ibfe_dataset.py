@@ -111,7 +111,8 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             n_wall: int = 768, n_valve: int = 256,
                             use_traction: bool = False,
                             predict_scalar: bool = False,
-                            shuffle_forcing: bool = False):
+                            shuffle_forcing: bool = False,
+                            planes: Optional[Sequence] = None):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
     ``shuffle_forcing`` enables the **forcing-shuffle diagnostic** (see
@@ -121,14 +122,25 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     Run A/B with this on and off; if the exact-vs-shuffled gap seen on synthetic
     data collapses for real (independently-estimated) FSI forcing, the physics
     benefit is genuine rather than trajectory injection.
+
+    ``planes`` (a list of :class:`~pinnecho.data.acquisition.ImagingPlane`) selects
+    the realistic multi-plane acquisition geometry: each echo view only sees the
+    fluid points inside its imaging-plane slab (apical / parasternal views). When
+    given it supersedes ``transducers`` (whole-volume point windows). Build them
+    with :func:`~pinnecho.data.acquisition.standard_views_from_frames`.
     """
     from .ibfe_io import frames_to_dtype
     frames = frames_to_dtype(frames, torch.get_default_dtype())
     dim = frames.spatial_dim
-    if transducers is None:
-        transducers = default_windows_from_frames(frames, n_windows=2)
-    data_X, beam_dir, v_beam = build_doppler_from_frames(
-        frames, transducers, noise_level=noise_level, seed=seed)
+    if planes is not None:
+        from .acquisition import build_multiplane_doppler_from_frames
+        data_X, beam_dir, v_beam = build_multiplane_doppler_from_frames(
+            frames, planes, noise_level=noise_level, seed=seed)
+    else:
+        if transducers is None:
+            transducers = default_windows_from_frames(frames, n_windows=2)
+        data_X, beam_dir, v_beam = build_doppler_from_frames(
+            frames, transducers, noise_level=noise_level, seed=seed)
     g = torch.Generator().manual_seed(seed)
 
     forcing_fluid = frames.forcing_fluid
@@ -254,11 +266,14 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                predict_scalar: bool = False, use_traction: bool = False,
                transducers: Optional[Sequence] = None, noise_level: float = 0.05,
                model_overrides: Optional[dict] = None, verbose: bool = True,
-               shuffle_forcing: bool = False):
+               shuffle_forcing: bool = False, planes: Optional[Sequence] = None):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
     Set ``shuffle_forcing=True`` to run the Ablation-6 forcing-shuffle diagnostic
-    on real IBFE forcing (see ``make_ibfe_batch_builder``).
+    on real IBFE forcing (see ``make_ibfe_batch_builder``). Pass ``planes`` (from
+    :func:`~pinnecho.data.acquisition.standard_views_from_frames`) to use the
+    realistic multi-plane echo acquisition geometry instead of whole-volume point
+    windows.
     """
     model, loss_fn = build_model_for_ibfe(
         frames, backbone=backbone, predict_scalar=predict_scalar,
@@ -267,7 +282,7 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
     build_batches = make_ibfe_batch_builder(
         frames, transducers=transducers, noise_level=noise_level, seed=seed,
         use_traction=use_traction, predict_scalar=predict_scalar,
-        shuffle_forcing=shuffle_forcing)
+        shuffle_forcing=shuffle_forcing, planes=planes)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

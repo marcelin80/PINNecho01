@@ -27,6 +27,15 @@ from .ibfe_dataset import (
     build_doppler_from_frames,
 )
 from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
+from .acquisition import (
+    ImagingPlane,
+    VIEWS_2D,
+    VIEWS_3D,
+    standard_views_from_extents,
+    standard_views_from_frames,
+    synthesize_multiplane_doppler,
+    build_multiplane_doppler_from_frames,
+)
 
 __all__ = [
     "SyntheticLVFSI",
@@ -56,4 +65,11 @@ __all__ = [
     "build_doppler_from_frames",
     "DopplerMeasurements",
     "synthesize_doppler",
+    "ImagingPlane",
+    "VIEWS_2D",
+    "VIEWS_3D",
+    "standard_views_from_extents",
+    "standard_views_from_frames",
+    "synthesize_multiplane_doppler",
+    "build_multiplane_doppler_from_frames",
 ]

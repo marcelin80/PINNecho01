@@ -219,4 +219,50 @@ model, metrics = train_ibfe(frames, backbone="fsi_informed",
 
 Multi-window 3D Doppler windows are placed automatically with
 `default_windows_from_frames(frames, n_windows=3)` (apical + two lateral), or pass
-your own transducer apex positions `[(x,y,z), …]` via `transducers=`.
+your own transducer apex positions `[(x,y,z), …]` via `transducers=`. For the
+realistic **multi-plane** acquisition geometry (each view only insonifies its own
+imaging slab), see the next section.
+
+---
+
+## Multi-plane Doppler acquisition geometry
+
+`default_windows_from_frames` / `transducers=` treat each acoustic window as a
+point that sees the **whole** fluid volume. A real transthoracic echo exam does
+not: it captures a few standard 2D **imaging planes**, and a given view only
+resolves the velocity component along its beam **and** only insonifies tissue
+lying in a thin slab around its plane. That sparse plane + angular coverage — not
+SNR or point count — is the structural bottleneck for 3D reconstruction, so the
+measurement layer models it explicitly (`pinnecho.data.acquisition`).
+
+An `ImagingPlane` is a probe `apex` (beam origin) + a unit slab `normal` (+
+optional `sector_halfangle`/`max_depth`); `thickness` is the elevation/slice
+half-width. The standard set (`VIEWS_3D = a4c, a2c, plax, psax`) is sized to a
+cavity's centre/extents (long axis `z`):
+
+| view | probe apex | slab normal | plane |
+|---|---|---|---|
+| `a4c`  | below (−z) | `+y` | long-axis (x–z) |
+| `a2c`  | below (−z) | `+x` | long-axis (y–z), A4C rotated 90° |
+| `plax` | side (+x)  | `+y` | parasternal long-axis |
+| `psax` | side (+x)  | `+z` | parasternal short-axis (cross-section) |
+
+```python
+from pinnecho.data import standard_views_from_frames, train_ibfe
+# ~12% of the mean extent ≈ a few-mm slice thickness
+planes = standard_views_from_frames(frames, thickness_frac=0.12)   # [a4c, a2c, plax, psax]
+model, metrics = train_ibfe(frames, backbone="fsi_informed",
+                            use_traction=True, planes=planes)      # planes supersede transducers
+```
+
+- Each view contributes only its in-slab points, so fewer / correlated data than
+  whole-volume windows — this is the point (realistic observability), not a bug.
+- `synthesize_multiplane_doppler(coords, velocity, planes, v_nyquist=, snr_db=,
+  sparsity=, dealias=)` is the standalone synth (adds Nyquist aliasing + SNR +
+  sparsity); it shares its sparsity/alias/noise tail with `synthesize_doppler`,
+  so a fixed seed is reproducible across both.
+- **2D** `IBFEFrames` get `VIEWS_2D = apical, lateral` with `normal=None` (an echo
+  image *is* 2D, so no slab filter) — the API stays dimension-generic.
+- Pick a subset with `standard_views_from_frames(frames, views=("a4c", "plax"))`,
+  or build custom `ImagingPlane`s (set `thickness`, `sector_halfangle`, `max_depth`)
+  to match a specific probe/protocol.

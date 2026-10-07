@@ -239,11 +239,13 @@ def evaluate_ibfe(model, frames) -> Dict[str, float]:
     out["pressure_relL2"] = float(
         torch.linalg.norm(p_pred - p_true) / (torch.linalg.norm(p_true) + 1e-12))
 
+    # Ground-truth vorticity is not stored in IBFEFrames; report the model's
+    # vorticity magnitude as a smoke check that gradients are non-degenerate.
     if dim == 2:
-        # Ground-truth vorticity is not stored in IBFEFrames; report the model's
-        # vorticity magnitude as a smoke check that gradients are non-degenerate.
         vort_pred = ev.vorticity_2d(model, X.clone()).detach()
-        out["vorticity_absmax"] = float(vort_pred.abs().max())
+    else:
+        vort_pred = ev.vorticity_3d(model, X.clone()).detach()
+    out["vorticity_absmax"] = float(vort_pred.abs().max())
     return out
 
 

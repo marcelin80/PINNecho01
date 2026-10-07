@@ -160,3 +160,63 @@ Repeat over several seeds and compare vorticity/WSS/pressure. If the exact-minus
 shuffled gap that appears on synthetic data **collapses** for real forcing, the
 advantage is a genuine physics prior rather than answer injection — the claim the
 synthetic study could not establish.
+
+---
+
+## IBAMR 3D export checklist
+
+Target for the real 3D Doppler-reconstruction pipeline. The whole 3D path is
+exercised end-to-end in CI (`tests/test_ibfe_pipeline.py::test_3d_*`,
+`tests/test_traction.py::test_*_3d_*`), so matching this contract is sufficient —
+no PINNecho code changes are needed. Emit a reference bundle to diff against:
+
+```bash
+python scripts/make_example_ibfe_export.py --dim 3 --valve --out data/ibfe_example_3d
+```
+
+**Set `spatial_dim = 3`.** Then every array widens by one column vs. 2D:
+
+| array | shape `(N, …)` | columns (exact order for CSV; any order if header-named) |
+|---|---|---|
+| `coords_fluid`   | `(N_f, 4)` | `x, y, z, t` |
+| `velocity_fluid` | `(N_f, 3)` | `u, v, w` |
+| `pressure_fluid` | `(N_f, 1)` | `p` |
+| `forcing_fluid`  | `(N_f, 3)` | `fx, fy, fz`  (N/m³; structure→fluid body force) |
+| `coords_wall`    | `(N_w, 4)` | `x, y, z, t` |
+| `normals_wall`   | `(N_w, 3)` | `nx, ny, nz`  (**outward unit**, ‖n‖=1) |
+| `velocity_wall`  | `(N_w, 3)` | `uw, vw, ww`  (FSI structural interface velocity) |
+| `traction_wall`  | `(N_w, 3)` | `tx, ty, tz`  (`t = σ·n`, Pa) |
+| `coords_mitral`  | `(N_m, 4)` | `x, y, z, t`  (optional; residence time) |
+| `velocity_mitral`| `(N_m, 3)` | `u, v, w` |
+| `coords_aortic` / `velocity_aortic` | `(N_a, 4)` / `(N_a, 3)` | optional outflow |
+
+**3D-specific conventions / pitfalls**
+- **Column order is spatial-first then time**: `(x, y, z, t)` — `t` is the *last*
+  column, not the third. (The physics operators slice spatial gradients by index
+  0..2, so a misplaced `t` silently corrupts `z`-derivatives.)
+- **Normals must be outward unit vectors in 3D** (`‖n‖ = 1`); the validator warns
+  otherwise. A consistently *inward* normal flips the sign of `traction_wall`.
+- **`traction_wall` is the full 3D Cauchy traction** `t_i = -p n_i + Σ_j μ(∂u_i/∂x_j
+  + ∂u_j/∂x_i) n_j` (symmetric stress). Export `σ·n` directly from the structural
+  stress; do **not** send only the pressure part `-p n`.
+- **`forcing_fluid` is the dominant Model-B signal in 3D too** — if it is all
+  zeros the FSI backbone collapses to the kinematic baseline (validator warns).
+- One bundle = **one cardiac cycle**; keep `t ∈ [0, cycle_period]`.
+- Units unchanged (SI): m, s, m/s, Pa, N/m³, kg/m³, Pa·s.
+
+**Verify before training**
+
+```python
+import torch; torch.set_default_dtype(torch.float32)
+from pinnecho.data import load_ibfe_output, validate_ibfe_frames, train_ibfe
+frames = load_ibfe_output("path/to/export_3d")      # .npz, manifest.yaml, or dir
+assert frames.spatial_dim == 3
+print(validate_ibfe_frames(frames).summary())        # expect OK
+# 3D A/B + traction continuity + multi-window Doppler all run unchanged:
+model, metrics = train_ibfe(frames, backbone="fsi_informed",
+                            use_traction=True, predict_scalar=True)
+```
+
+Multi-window 3D Doppler windows are placed automatically with
+`default_windows_from_frames(frames, n_windows=3)` (apical + two lateral), or pass
+your own transducer apex positions `[(x,y,z), …]` via `transducers=`.

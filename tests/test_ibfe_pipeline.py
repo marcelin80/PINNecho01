@@ -16,6 +16,7 @@ from pinnecho.data.ibfe_io import (
 from pinnecho.data.ibfe_validate import validate_ibfe_frames
 from pinnecho.data.ibfe_dataset import (
     make_ibfe_batch_builder, build_model_for_ibfe, evaluate_ibfe, train_ibfe,
+    default_windows_from_frames, build_doppler_from_frames,
 )
 
 
@@ -70,17 +71,60 @@ def test_validator_flags_bad_shapes_and_nans():
     assert not r2.ok
 
 
-def test_3d_exporter_and_validation():
+def _frames_3d(with_valve=True):
     torch.set_default_dtype(torch.float64)
     cfg = Config()
-    frames = synthetic_ibfe_frames_3d(cfg, n_fluid=500, n_wall=200, n_frames=4,
-                                      with_valve=True)
+    return synthetic_ibfe_frames_3d(cfg, n_fluid=500, n_wall=200, n_frames=4,
+                                    with_valve=with_valve)
+
+
+def test_3d_exporter_and_validation():
+    frames = _frames_3d()
     assert frames.spatial_dim == 3
     assert frames.coords_fluid.shape[1] == 4
     assert frames.velocity_fluid.shape[1] == 3
     assert frames.traction_wall.shape[1] == 3
     report = validate_ibfe_frames(frames)
     assert report.ok, report.summary()
+
+
+def test_3d_npz_and_manifest_roundtrip(tmp_path):
+    frames = _frames_3d()
+    # NPZ round-trip preserves every tensor + spatial_dim.
+    npz = save_ibfe_npz(frames, tmp_path / "b3d.npz")
+    ld = load_ibfe_npz(npz)
+    assert ld.spatial_dim == 3
+    for k in NPZ_TENSOR_KEYS:
+        assert torch.allclose(getattr(frames, k), getattr(ld, k), atol=1e-9), k
+    # Manifest/CSV round-trip (header-matched columns) reloads a valid 3D bundle.
+    mp = save_ibfe_manifest_csv(frames, tmp_path / "dir3d")
+    lm = load_ibfe_manifest(mp)
+    assert lm.spatial_dim == 3
+    assert lm.coords_fluid.shape[1] == 4 and lm.velocity_fluid.shape[1] == 3
+    assert lm.normals_wall.shape[1] == 3 and lm.traction_wall.shape[1] == 3
+    assert validate_ibfe_frames(lm).ok
+    # Dispatch by path also yields a 3D bundle.
+    fd = load_ibfe_output(str(tmp_path / "dir3d"), spatial_dim=3)
+    assert fd.spatial_dim == 3 and fd.coords_fluid.shape[1] == 4
+
+
+def test_3d_adapter_and_training_with_traction():
+    torch.set_default_dtype(torch.float32)
+    frames = _frames_3d(with_valve=True)
+    wins = default_windows_from_frames(frames, n_windows=3)
+    assert len(wins) == 3 and all(len(w) == 3 for w in wins)
+    # Multi-window 3D Doppler is single-component (beam-projected) in 3D.
+    dX, bd, vb = build_doppler_from_frames(frames, wins, noise_level=0.05, seed=0)
+    assert dX.shape[1] == 4 and bd.shape[1] == 3 and vb.shape[1] == 1
+    assert dX.shape[0] == 3 * frames.coords_fluid.shape[0]
+    # End-to-end: FSI-informed backbone with 3D traction-continuity + valve + scalar.
+    model, metrics = train_ibfe(frames, backbone="fsi_informed", steps=25,
+                                lbfgs_iters=0, predict_scalar=True, use_traction=True,
+                                transducers=wins, verbose=False)
+    assert model.spatial_dim == 3
+    for key in ("vel_relL2_u", "vel_relL2_v", "vel_relL2_w", "vel_relL2_speed",
+                "pressure_relL2", "vorticity_absmax"):
+        assert key in metrics and metrics[key] == metrics[key]  # finite
 
 
 def test_load_ibfe_output_dispatch(tmp_path):

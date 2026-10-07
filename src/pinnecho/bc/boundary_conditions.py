@@ -114,6 +114,37 @@ def fsi_wall_velocity_loss(
     return _relative_mse(res, fsi_wall_velocity) if relative else res.pow(2).mean()
 
 
+def fluid_traction(
+    velocity: Sequence[torch.Tensor],
+    p: torch.Tensor,
+    coords: torch.Tensor,
+    normals: torch.Tensor,
+    mu: float,
+) -> torch.Tensor:
+    """Newtonian fluid Cauchy traction ``t = sigma . n`` (2D or 3D), shape ``(N, dim)``.
+
+    ``sigma_ij = -p delta_ij + mu (du_i/dx_j + du_j/dx_i)`` so that
+    ``t_i = -p n_i + sum_j mu (du_i/dx_j + du_j/dx_i) n_j``.
+
+    ``velocity`` is a sequence of ``dim`` component tensors ``(N, 1)`` produced
+    from ``coords`` (a leaf tensor with ``requires_grad=True``); ``normals`` is
+    ``(N, dim)``. Dimension is inferred from ``len(velocity)``. Spatial gradient
+    columns are sliced by index (0..dim-1), so this is agnostic to where the time
+    column sits (unlike the ``"x"/"y"`` name map, which is 2D-specific).
+    """
+    dim = len(velocity)
+    grads = [ops.grad(velocity[i], coords) for i in range(dim)]  # du_i/dx_j at [:, j]
+    cols = []
+    for i in range(dim):
+        t_i = -p * normals[:, i:i + 1]
+        for j in range(dim):
+            dui_dxj = grads[i][:, j:j + 1]
+            duj_dxi = grads[j][:, i:i + 1]
+            t_i = t_i + mu * (dui_dxj + duj_dxi) * normals[:, j:j + 1]
+        cols.append(t_i)
+    return torch.cat(cols, dim=1)
+
+
 def fluid_traction_2d(
     u: torch.Tensor,
     v: torch.Tensor,
@@ -122,21 +153,8 @@ def fluid_traction_2d(
     normals: torch.Tensor,
     mu: float,
 ) -> torch.Tensor:
-    """Newtonian fluid Cauchy traction ``t = sigma . n`` at each point (N, 2).
-
-    ``sigma = -p I + mu (grad u + grad u^T)`` (2D). ``u, v, p`` must have been
-    produced from ``coords`` (a leaf tensor with ``requires_grad=True``) so the
-    velocity gradients can be taken by autograd. ``normals`` is ``(N, 2)``.
-    """
-    u_x, u_y = ops.d(u, coords, "x"), ops.d(u, coords, "y")
-    v_x, v_y = ops.d(v, coords, "x"), ops.d(v, coords, "y")
-    sigma_xx = -p + 2.0 * mu * u_x
-    sigma_yy = -p + 2.0 * mu * v_y
-    sigma_xy = mu * (u_y + v_x)
-    nx, ny = normals[:, 0:1], normals[:, 1:2]
-    t_x = sigma_xx * nx + sigma_xy * ny
-    t_y = sigma_xy * nx + sigma_yy * ny
-    return torch.cat([t_x, t_y], dim=1)
+    """2D convenience wrapper around :func:`fluid_traction` (``(N, 2)``)."""
+    return fluid_traction([u, v], p, coords, normals, mu)
 
 
 def traction_continuity_loss(
@@ -154,14 +172,13 @@ def traction_continuity_loss(
     traction from the FSI solve. Regularises the network by physical consistency
     with the structural model rather than position-matching alone.
 
-    ``velocity_pred`` are components produced from ``coords`` (leaf tensor with
-    ``requires_grad=True``); ``structure_traction`` is ``(N, 2)`` from the FSI
-    interface. Currently 2D.
+    ``velocity_pred`` are the ``dim`` components produced from ``coords`` (leaf
+    tensor with ``requires_grad=True``); ``structure_traction`` is ``(N, dim)``
+    from the FSI interface. Supports 2D and 3D.
     """
-    if len(velocity_pred) != 2:
-        raise NotImplementedError("traction_continuity_loss is 2D only for now")
-    t_fluid = fluid_traction_2d(
-        velocity_pred[0], velocity_pred[1], pressure_pred, coords, normals, mu
-    )
+    dim = len(velocity_pred)
+    if dim not in (2, 3):
+        raise ValueError(f"traction_continuity_loss expects 2 or 3 components, got {dim}")
+    t_fluid = fluid_traction(velocity_pred, pressure_pred, coords, normals, mu)
     res = t_fluid - structure_traction
     return _relative_mse(res, structure_traction) if relative else res.pow(2).mean()

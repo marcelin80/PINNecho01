@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **72 passing** (`pytest`)
+> 테스트: **77 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -175,17 +175,17 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (72 passing)
+## 6. 테스트 현황 (77 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
 | `test_operators.py` | autograd 미분 연산자 vs 해석해 |
 | `test_ns_residual_taylor_green.py` | NS 잔차 ~0 (Taylor–Green, Poiseuille) |
 | `test_scalar_transport.py` | 스칼라 전달 잔차 ~0 |
-| `test_traction.py` | 유체 traction + 연속성 |
+| `test_traction.py` | 유체 traction + 연속성 (2D/3D) |
 | `test_synthetic_lv.py` / `test_synthetic_lv_3d.py` | 2D/3D 합성 지상진값 자기일관성 |
 | `test_doppler.py` / `test_synthesize_doppler.py` | 도플러 투영·잡음·에일리어싱·SNR |
-| `test_ibfe_export.py` / `test_ibfe_pipeline.py` | IBFE 인터페이스 + I/O·검증·어댑터 |
+| `test_ibfe_export.py` / `test_ibfe_pipeline.py` | IBFE 인터페이스 + I/O·검증·어댑터 (2D/3D 왕복·학습) |
 | `test_visualize_smoke.py` / `test_observability_smoke.py` | 시각화·스윕 배관 |
 | `test_train_model_a_smoke.py` / `test_train_3d_smoke.py` | Model A/B·3D 학습 스모크 |
 | `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |

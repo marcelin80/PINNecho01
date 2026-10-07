@@ -2,7 +2,9 @@
 
 import torch
 
-from pinnecho.bc.boundary_conditions import fluid_traction_2d, traction_continuity_loss
+from pinnecho.bc.boundary_conditions import (
+    fluid_traction, fluid_traction_2d, traction_continuity_loss,
+)
 
 torch.set_default_dtype(torch.float64)
 
@@ -58,4 +60,52 @@ def test_traction_continuity_zero_when_matched():
     normals = normals / normals.norm(dim=1, keepdim=True)
     target = fluid_traction_2d(u, v, p, X, normals, mu).detach()
     loss = traction_continuity_loss([u, v], p, X, normals, target, mu)
+    assert float(loss.detach()) < 1e-12
+
+
+def _leaf4(cols):
+    return torch.stack(cols, dim=1).clone().requires_grad_(True)
+
+
+def test_fluid_traction_3d_pressure_only():
+    """3D: u=v=w=0, p=const  ->  t = -p n (coords are (x,y,z,t))."""
+    n = 40
+    g = torch.Generator().manual_seed(3)
+    X = _leaf4([torch.rand(n, generator=g) for _ in range(4)])  # x,y,z,t
+    z = [torch.zeros(n, 1) for _ in range(3)]
+    p = torch.full((n, 1), 2.0)
+    nrm = torch.randn(n, 3)
+    nrm = nrm / nrm.norm(dim=1, keepdim=True)
+    t = fluid_traction(z, p, X, nrm, mu=0.1)
+    assert t.shape == (n, 3)
+    assert torch.allclose(t, -2.0 * nrm, atol=1e-9)
+
+
+def test_fluid_traction_3d_simple_shear():
+    """3D: u = gamma*y, v=w=0, p=0, n=(0,1,0)  ->  t = (mu*gamma, 0, 0)."""
+    n = 32
+    gamma, mu = 1.7, 0.02
+    g = torch.Generator().manual_seed(4)
+    X = _leaf4([torch.rand(n, generator=g) for _ in range(4)])
+    y = X[:, 1:2]
+    vel = [gamma * y, torch.zeros(n, 1), torch.zeros(n, 1)]
+    p = torch.zeros(n, 1)
+    nrm = torch.tensor([[0.0, 1.0, 0.0]]).repeat(n, 1)
+    t = fluid_traction(vel, p, X, nrm, mu=mu)
+    expected = torch.tensor([[mu * gamma, 0.0, 0.0]]).repeat(n, 1)
+    assert torch.allclose(t, expected, atol=1e-9)
+
+
+def test_traction_continuity_3d_zero_when_matched():
+    n = 24
+    mu = 0.04
+    g = torch.Generator().manual_seed(5)
+    X = _leaf4([torch.rand(n, generator=g) for _ in range(4)])
+    xx, yy, zz = X[:, 0:1], X[:, 1:2], X[:, 2:3]
+    vel = [torch.sin(xx) * yy, -torch.cos(yy) * zz, xx * zz]
+    p = xx + yy - zz
+    nrm = torch.randn(n, 3)
+    nrm = nrm / nrm.norm(dim=1, keepdim=True)
+    target = fluid_traction(vel, p, X, nrm, mu).detach()
+    loss = traction_continuity_loss(vel, p, X, nrm, target, mu)
     assert float(loss.detach()) < 1e-12

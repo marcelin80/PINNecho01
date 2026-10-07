@@ -97,6 +97,23 @@ def vorticity_2d(model, X: torch.Tensor) -> torch.Tensor:
     return ops.d(v, X, "x") - ops.d(u, X, "y")
 
 
+def vorticity_3d(model, X: torch.Tensor) -> torch.Tensor:
+    """3D vorticity vector ``omega = curl(u)`` from the model, shape ``(N, 3)``.
+
+    Spatial derivatives are sliced by column index (x=0, y=1, z=2), so this is
+    agnostic to the time-column position (unlike the ``"x"/"y"`` name map).
+    """
+    X = X.clone().requires_grad_(True)
+    f = model.fields(X)
+    gu = ops.grad(f["u"], X)
+    gv = ops.grad(f["v"], X)
+    gw = ops.grad(f["w"], X)
+    wx = gw[:, 1:2] - gv[:, 2:3]
+    wy = gu[:, 2:3] - gw[:, 0:1]
+    wz = gv[:, 0:1] - gu[:, 1:2]
+    return torch.cat([wx, wy, wz], dim=1)
+
+
 def q_criterion_2d(model, X: torch.Tensor) -> torch.Tensor:
     """2D Q-criterion ``Q = 0.5(||Omega||^2 - ||S||^2)`` from the model (N,1).
 

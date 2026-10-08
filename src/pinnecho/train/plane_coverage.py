@@ -218,3 +218,7 @@ def coverage_main() -> None:  # pragma: no cover - CLI wiring
               f"{r['vel_relL2_speed_mean']:8.3f} {r['vel_relL2_u_mean']:8.3f} "
               f"{r['vel_relL2_v_mean']:8.3f} {r['vel_relL2_w_mean']:8.3f} "
               f"{r['pressure_relL2_mean']:8.3f}")
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI wiring
+    coverage_main()

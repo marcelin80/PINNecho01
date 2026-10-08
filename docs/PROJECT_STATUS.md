@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **89 passing** (`pytest`)
+> 테스트: **93 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -23,6 +23,11 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 - **순환성과 독립적으로 남는 견고한 결과**: **관측성(다중 음향창)** — FSI 없는 baseline에서도
   교차빔 `u`가 창 수에 단조 반응(0.98→0.75), SNR·희소성은 거의 무관. 단, 다중창이 주 성분 `v`·
   WSS corr는 오히려 낮출 수 있음. 전용 정리: [`docs/OBSERVABILITY.md`](OBSERVABILITY.md).
+- **3D 평면-커버리지 관측성**(표준 에코 뷰, FSI 무관): 성분별로 커버리지 제약이 드러남 —
+  축방향 `w`는 단일 심첨 평면만으로도 먼저 복원(0.954), 측방 `u`는 상보적 프로브 위치
+  (parasternal)를 더해야 관측 가능(0.996→0.975), 측방 `v`는 표준 A4C/A2C/PLAX/PSAX
+  세트로는 구조적으로 관측 불가(≈0.99)—이상적 전체-체적 창에서만 복원 시작(0.978).
+  절대오차는 CPU 예산에서 compute-limited이나 성분 순서는 시드 잡음 위. 동 문서에 수록.
 - **Stage 1 범위**: 실제 환자·에코 데이터 없음. IBAMR/IBFE 파이프라인 출력을 모사한
   **해석적·자기일관(divergence-free, exact no-slip, NS-exact) 합성 지상진값** 위에서 검증.
 
@@ -67,6 +72,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | **다중-평면 음향창 지오메트리**(A4C/A2C/PLAX/PSAX 슬랩 선택) | `data/acquisition.py` | ✅ + 단위테스트 |
 | A/B 시각화(필드 패널 + 심장주기 GIF) | `eval/visualize.py` | ✅ + 스모크 |
 | 관측성 스윕(윈도우/SNR/희소성) | `train/observability.py` | ✅ + 스모크 |
+| **3D 평면-커버리지 관측성 스윕**(A4C/A2C/PLAX/PSAX vs 이상적 점-윈도우) | `train/plane_coverage.py` | ✅ + 스모크 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -176,7 +182,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (89 passing)
+## 6. 테스트 현황 (93 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -189,6 +195,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_acquisition.py` | 다중-평면 음향창 지오메트리(A4C/A2C/PLAX/PSAX)·슬랩 선택·엔드투엔드 |
 | `test_ibfe_export.py` / `test_ibfe_pipeline.py` | IBFE 인터페이스 + I/O·검증·어댑터 (2D/3D 왕복·학습) |
 | `test_visualize_smoke.py` / `test_observability_smoke.py` | 시각화·스윕 배관 |
+| `test_plane_coverage_smoke.py` | 3D 평면-커버리지 스윕 배관(프로토콜·지표·커버리지) |
 | `test_train_model_a_smoke.py` / `test_train_3d_smoke.py` | Model A/B·3D 학습 스모크 |
 | `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |

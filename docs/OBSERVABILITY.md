@@ -101,3 +101,100 @@ python scripts/observability_sweep.py --backbone baseline --no-traction \
     --steps 2000 --lbfgs-iters 200 --seeds 0 1 2 3 4 --dtype float32 \
     --out docs/results/observability
 ```
+
+---
+
+# Plane-coverage observability in 3D (standard echo views)
+
+The 2D sweep above abstracts each window as a point that sees the **whole**
+field. A real transthoracic exam does not: it acquires a few standard 2D
+**imaging planes**, and each view resolves only the beam component of the fluid
+lying in its thin slab (`pinnecho.data.acquisition`). This section asks the 3D
+version of the same question — *which standard-view protocol makes which
+velocity component observable?* — again on the FSI-free `baseline` backbone.
+
+> Driver: `pinnecho.train.plane_coverage` (`scripts/plane_coverage_sweep.py`,
+> console script `pinnecho-coverage`). Raw numbers:
+> [`docs/results/coverage/coverage.json`](results/coverage/coverage.json).
+> Figures: [`coverage_vel_relL2_speed.png`](results/coverage/coverage_vel_relL2_speed.png),
+> `coverage_vel_relL2_v.png`, `coverage_pressure_relL2.png`.
+
+## Setup
+
+- 3D volume-preserving-ellipsoid ground truth (`synthetic_ibfe_frames_3d`), long
+  axis `z`. Backbone `baseline`, 1500 Adam + 150 L-BFGS, float32, CPU, **3 seeds**.
+- Protocols: `a4c` (single apical plane), `a4c+a2c` (apical biplane), `a4c+plax`
+  (apical + parasternal, a *different probe apex*), the full `4-view`
+  (`a4c+a2c+plax+psax`), and an **idealized** reference — three whole-volume point
+  windows (every fluid point seen from 3 beam angles), the setup the 2D sweep used.
+- Held-out per-component velocity relative L2 (`u` lateral-x, `v` lateral-y, `w`
+  axial-z) + pressure. Mean over seeds; seed std ≈ 0.001–0.003 unless noted.
+
+## Result
+
+| protocol | views | n_data | `u` relL2 ↓ | `v` relL2 ↓ | `w` relL2 ↓ | speed relL2 ↓ |
+|---|---|---|---|---|---|---|
+| `a4c` (single plane)        | 1 | 1140 | 0.996 | 0.995 | **0.954** | 0.972 |
+| `a4c+a2c` (apical biplane)  | 2 | 2723 | 0.993 | 0.993 | 0.954 | 0.971 |
+| `a4c+plax` (apical+parasternal) | 2 | 2280 | **0.975** | 0.995 | 0.960 | 0.973 |
+| `4-view`                    | 4 | 4725 | 0.981 | 0.993 | 0.960 | 0.972 |
+| point-windows ×3 (idealized)| 3 | 9000 | 0.983 | **0.978** | 0.963 | 0.970 |
+
+### 1. Doppler recovers the beam-aligned component first
+
+Every apical beam is dominated by its `z` (axial) projection, so even a *single*
+apical plane recovers `w` best (relL2 **0.954**) while leaving the two lateral
+components essentially unconstrained (`u`, `v` ≈ 0.99 — no better than zero). The
+apical biplane (`a4c+a2c`) shares that same apex/axial orientation, so it does
+**not** improve any component beyond seed scatter: more apical data ≠ more
+directions.
+
+### 2. A complementary beam angle is what unlocks a lateral component
+
+Adding a *parasternal* window (`plax`, probe moved to +x so the beam carries an
+`x`-component) is what makes the lateral-`x` component observable: `u` drops
+**0.996 → 0.975**, a ~0.02 shift ≫ the ~0.003 seed std. The `4-view` set keeps
+`u` recovered (0.981). This is the 3D restatement of the 2D finding — *how many
+distinct beam directions* you measure, not how much apical data you collect.
+
+### 3. The `y`-lateral component is structurally unobservable from standard views
+
+The crux: `v` (lateral-`y`) stays ≈ 0.993–0.995 for **every** planar protocol,
+including the full 4-view set — none of the standard transthoracic windows
+insonify with a strong `y`-beam-component. Only the idealized whole-volume
+windows (which include a lateral `+y` apex) begin to recover it (`v` **0.978**).
+So the standard A4C/A2C/PLAX/PSAX set leaves one entire velocity direction
+under-determined; closing that gap needs a beam orientation the standard views do
+not provide — not better SNR or more frames.
+
+### Caveat — absolute error is compute-limited, the *ordering* is the result
+
+At a CPU-affordable budget (1500+150 steps) the 3D single-component inverse does
+not converge to a good absolute reconstruction: `speed` relL2 sits at ≈ 0.97 for
+**all** protocols (within ~0.002 seed scatter), because it is dominated by the
+components no standard view observes. The robust, physically-interpretable signal
+is the **per-component ordering** (axial recovered first; lateral-`x` unlocked by
+a complementary apex; lateral-`y` only by non-standard coverage), which is well
+above seed noise. Definitive magnitudes need a longer/GPU schedule — the same
+compute gate that applies to the real-FSI step (see [`ABLATIONS.md`](ABLATIONS.md)).
+
+## Takeaways
+
+1. **3D intraventricular reconstruction from standard Doppler views is
+   coverage-limited, component by component**: axial (beam-aligned) is recovered
+   first, a complementary probe apex is required for each additional lateral
+   direction, and the `y`-lateral component is not observable from the standard
+   A4C/A2C/PLAX/PSAX set at all.
+2. This extends the 2D angular-coverage result into explicit 3D anatomy and is,
+   like it, **FSI-free** and immune to the circularity caveats.
+3. It gives a concrete acquisition-design reading: adding *angularly complementary*
+   windows (not more of the same apical view, and not more SNR/frames) is what buys
+   observability — and some directions require windows outside the standard set.
+
+## Reproduce
+
+```bash
+python scripts/plane_coverage_sweep.py --backbone baseline --no-traction \
+    --steps 1500 --lbfgs-iters 150 --seeds 0 1 2 --n-fluid 3000 --dtype float32 \
+    --out docs/results/coverage
+```

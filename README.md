@@ -488,6 +488,28 @@ This whole result uses **no FSI**, so it is orthogonal to the circularity debate
 Full write-up: **[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)**; raw numbers:
 [`docs/results/observability/sweep.json`](docs/results/observability/sweep.json).
 
+#### 3D plane-coverage sweep (standard echo views)
+
+`scripts/plane_coverage_sweep.py` (console script `pinnecho-coverage`) extends the
+sweep into real 3D acquisition geometry: it trains the reconstruction under
+standard imaging-plane protocols (`a4c` → `a4c+a2c` → `a4c+plax` → `4-view`) plus
+an idealized whole-volume point-window reference, where each echo view only
+insonifies the fluid in its own slab (`pinnecho.data.acquisition`). The signal is
+**per component**: the axial `w` is recovered first from a single apical plane
+(0.954), the lateral `u` only once a complementary parasternal apex is added
+(0.996 → **0.975**), and the lateral `v` is *not observable* from the standard
+A4C/A2C/PLAX/PSAX set (≈0.99) — only idealized whole-volume windows begin to
+recover it (0.978). Absolute error is compute-limited (`speed` ≈ 0.97 for all
+protocols at a CPU budget); the per-component **ordering** is the robust result.
+Same write-up: **[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)**; raw numbers:
+[`docs/results/coverage/coverage.json`](docs/results/coverage/coverage.json).
+
+```bash
+python scripts/plane_coverage_sweep.py --backbone baseline --no-traction \
+    --steps 1500 --lbfgs-iters 150 --seeds 0 1 2 --n-fluid 3000 --dtype float32 \
+    --out docs/results/coverage
+```
+
 ### 3D end-to-end validation
 
 `data/synthetic_lv_3d.py` extends the manufactured ground truth to a

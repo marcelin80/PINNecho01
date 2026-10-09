@@ -1,0 +1,50 @@
+[
+  {
+    "name": "a4c+plax (standard pair)",
+    "planar": true,
+    "n_views": 2,
+    "n_data": 2280,
+    "vel_relL2_speed_mean": 0.972538153330485,
+    "vel_relL2_speed_std": 0.0012673183550264114,
+    "vel_relL2_u_mean": 0.9748862783114115,
+    "vel_relL2_u_std": 0.0026336748176296948,
+    "vel_relL2_v_mean": 0.9953250686327616,
+    "vel_relL2_v_std": 0.0018196369122633917,
+    "vel_relL2_w_mean": 0.9601310094197592,
+    "vel_relL2_w_std": 0.002204444974717956,
+    "pressure_relL2_mean": 1.0271689693133037,
+    "pressure_relL2_std": 0.032699583091423394
+  },
+  {
+    "name": "a4c+plax+lat_y (+research window)",
+    "planar": true,
+    "n_views": 3,
+    "n_data": 3863,
+    "vel_relL2_speed_mean": 0.9714848796526591,
+    "vel_relL2_speed_std": 0.0019897812565166442,
+    "vel_relL2_u_mean": 0.9819373687108358,
+    "vel_relL2_u_std": 0.0014636716581445596,
+    "vel_relL2_v_mean": 0.9716797471046448,
+    "vel_relL2_v_std": 0.003004056372524003,
+    "vel_relL2_w_mean": 0.9690998196601868,
+    "vel_relL2_w_std": 0.0016230965001941594,
+    "pressure_relL2_mean": 1.0703102350234985,
+    "pressure_relL2_std": 0.03280966955925944
+  },
+  {
+    "name": "point-windows x3 (idealized)",
+    "planar": false,
+    "n_views": 3,
+    "n_data": 9000,
+    "vel_relL2_speed_mean": 0.9697912534077963,
+    "vel_relL2_speed_std": 0.0009605610026617726,
+    "vel_relL2_u_mean": 0.9826411803563436,
+    "vel_relL2_u_std": 0.0013254961281328305,
+    "vel_relL2_v_mean": 0.9775597055753072,
+    "vel_relL2_v_std": 0.0014527239951515006,
+    "vel_relL2_w_mean": 0.9629602829615275,
+    "vel_relL2_w_std": 0.0012506302381099113,
+    "pressure_relL2_mean": 1.0782606204350789,
+    "pressure_relL2_std": 0.032081652995398294
+  }
+]

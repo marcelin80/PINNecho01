@@ -178,13 +178,41 @@ a complementary apex; lateral-`y` only by non-standard coverage), which is well
 above seed noise. Definitive magnitudes need a longer/GPU schedule — the same
 compute gate that applies to the real-FSI step (see [`ABLATIONS.md`](ABLATIONS.md)).
 
+### Closing the gap — the `y` component is a beam-direction gap, not a method limit
+
+Is the `v` blind spot fundamental, or just missing coverage? To decide, we add a
+**non-standard research window** `lat_y` (`EXTRA_VIEWS_3D`): a probe apex
+displaced along `+y` so its beam carries the lateral-`y` component (verified
+`y`-dominant, orthogonal to `plax`'s `x`-beam). It is *not* a claim that such a
+window is clinically available — it would need matrix-probe elevation steering or
+an extra acoustic access — but it isolates the acquisition lever
+([`docs/results/coverage_gap/coverage.json`](results/coverage_gap/coverage.json),
+3 seeds):
+
+| protocol | views | `u` relL2 ↓ | `v` relL2 ↓ | `w` relL2 ↓ |
+|---|---|---|---|---|
+| `a4c+plax` (standard pair) | 2 | 0.975 | **0.995** | 0.960 |
+| `a4c+plax+lat_y` (+ research window) | 3 | 0.982 | **0.972 ±0.003** | 0.969 |
+| point-windows ×3 (idealized) | 3 | 0.983 | 0.978 | 0.963 |
+
+Adding the single `y`-beam window pulls `v` **0.995 → 0.972** (a ~0.024 drop ≫ the
+~0.003 seed std) — reaching, and even marginally beating, the idealized
+whole-volume reference (0.978). So the lateral-`y` blind spot is a **pure
+beam-direction coverage gap**: one window pointed along the missing axis closes
+it, and the reconstruction method is not the bottleneck. Consistent with the
+2D "not a free lunch" caveat, the already-observed `u`/`w` tick up marginally
+(0.975→0.982, 0.960→0.969) as the fit redistributes toward the newly-constrained
+direction.
+
 ## Takeaways
 
 1. **3D intraventricular reconstruction from standard Doppler views is
    coverage-limited, component by component**: axial (beam-aligned) is recovered
    first, a complementary probe apex is required for each additional lateral
    direction, and the `y`-lateral component is not observable from the standard
-   A4C/A2C/PLAX/PSAX set at all.
+   A4C/A2C/PLAX/PSAX set at all — but it is a *coverage* gap, closed by one window
+   pointed along the missing axis (reaching idealized-coverage `v`-recovery), not
+   a method limitation.
 2. This extends the 2D angular-coverage result into explicit 3D anatomy and is,
    like it, **FSI-free** and immune to the circularity caveats.
 3. It gives a concrete acquisition-design reading: adding *angularly complementary*
@@ -194,7 +222,12 @@ compute gate that applies to the real-FSI step (see [`ABLATIONS.md`](ABLATIONS.m
 ## Reproduce
 
 ```bash
+# standard protocols (single plane -> 4-view -> idealized point windows)
 python scripts/plane_coverage_sweep.py --backbone baseline --no-traction \
     --steps 1500 --lbfgs-iters 150 --seeds 0 1 2 --n-fluid 3000 --dtype float32 \
     --out docs/results/coverage
+# gap-closing: standard a4c+plax pair vs. + lat_y research window
+python scripts/plane_coverage_sweep.py --protocols gap --backbone baseline \
+    --no-traction --steps 1500 --lbfgs-iters 150 --seeds 0 1 2 --n-fluid 3000 \
+    --dtype float32 --out docs/results/coverage_gap
 ```

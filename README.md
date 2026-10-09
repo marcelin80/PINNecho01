@@ -501,8 +501,13 @@ insonifies the fluid in its own slab (`pinnecho.data.acquisition`). The signal i
 A4C/A2C/PLAX/PSAX set (≈0.99) — only idealized whole-volume windows begin to
 recover it (0.978). Absolute error is compute-limited (`speed` ≈ 0.97 for all
 protocols at a CPU budget); the per-component **ordering** is the robust result.
+A follow-up `--protocols gap` run confirms the lateral-`v` blind spot is a **pure
+beam-direction coverage gap**: adding one non-standard window pointed along `y`
+(`lat_y`) pulls `v` 0.995 → **0.972**, reaching the idealized whole-volume
+reference (0.978) — not a method limitation.
 Same write-up: **[`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md)**; raw numbers:
-[`docs/results/coverage/coverage.json`](docs/results/coverage/coverage.json).
+[`docs/results/coverage/coverage.json`](docs/results/coverage/coverage.json),
+[`coverage_gap/coverage.json`](docs/results/coverage_gap/coverage.json).
 
 ```bash
 python scripts/plane_coverage_sweep.py --backbone baseline --no-traction \

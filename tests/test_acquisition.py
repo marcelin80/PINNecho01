@@ -7,6 +7,7 @@ import torch
 
 from pinnecho.config import Config
 from pinnecho.data.acquisition import (
+    EXTRA_VIEWS_3D,
     ImagingPlane,
     VIEWS_2D,
     VIEWS_3D,
@@ -37,6 +38,20 @@ def test_standard_views_3d_names_and_geometry():
     assert by["a4c"].normal.tolist() == [0.0, 1.0, 0.0]
     assert by["a2c"].normal.tolist() == [1.0, 0.0, 0.0]
     assert by["psax"].normal.tolist() == [0.0, 0.0, 1.0]
+
+
+def test_lat_y_research_window_beam_is_y_dominant():
+    # lat_y is a non-standard window not in the default set; its beam must carry
+    # the lateral-y component (unlike plax, which is x-dominant).
+    assert "lat_y" in EXTRA_VIEWS_3D and "lat_y" not in VIEWS_3D
+    ext = [0.04, 0.04, 0.06]
+    lat_y = standard_views_from_extents([0, 0, 0], ext, 3, views=("lat_y",))[0]
+    plax = standard_views_from_extents([0, 0, 0], ext, 3, views=("plax",))[0]
+    pts = (torch.rand(2000, 3) - 0.5) * 0.03
+    by = lat_y.beams(pts).abs().mean(0)
+    bx = plax.beams(pts).abs().mean(0)
+    assert by[1] > by[0] and by[1] > by[2]      # lat_y beam ~ y
+    assert bx[0] > bx[1] and bx[0] > bx[2]      # plax beam ~ x (complementary)
 
 
 def test_standard_views_2d_have_no_slab():

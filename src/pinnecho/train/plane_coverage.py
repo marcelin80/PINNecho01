@@ -71,6 +71,27 @@ def default_coverage_conditions() -> List[CoverageCondition]:
     ]
 
 
+def gap_closing_conditions() -> List[CoverageCondition]:
+    """Protocols that isolate the acquisition lever for the unobserved lateral-``y``
+    component: the standard apical+parasternal pair (recovers ``u``, not ``v``),
+    the same pair plus the non-standard ``lat_y`` research window (whose beam
+    carries ``y``), and the idealized whole-volume reference. If adding ``lat_y``
+    pulls ``v`` down toward the idealized reference, the gap is a pure coverage
+    (beam-direction) gap, not a method limitation."""
+    return [
+        CoverageCondition("a4c+plax (standard pair)", views=("a4c", "plax")),
+        CoverageCondition("a4c+plax+lat_y (+research window)",
+                          views=("a4c", "plax", "lat_y")),
+        CoverageCondition("point-windows x3 (idealized)", n_point_windows=3),
+    ]
+
+
+PROTOCOL_SETS = {
+    "default": default_coverage_conditions,
+    "gap": gap_closing_conditions,
+}
+
+
 def _count_data_points(frames, cond: CoverageCondition) -> int:
     """Number of single-component Doppler samples a protocol yields."""
     if cond.is_planar():
@@ -183,6 +204,9 @@ def coverage_main() -> None:  # pragma: no cover - CLI wiring
     ap = argparse.ArgumentParser(
         description="3D Doppler plane-coverage observability sweep.")
     ap.add_argument("--config", default=None)
+    ap.add_argument("--protocols", default="default", choices=sorted(PROTOCOL_SETS),
+                    help="'default' (single plane -> 4-view -> idealized) or "
+                         "'gap' (standard pair vs. +lat_y research window).")
     ap.add_argument("--backbone", default="baseline",
                     choices=["baseline", "fsi_informed"])
     ap.add_argument("--steps", type=int, default=1500)
@@ -198,7 +222,8 @@ def coverage_main() -> None:  # pragma: no cover - CLI wiring
     torch.set_default_dtype(torch.float64 if args.dtype == "float64" else torch.float32)
     config = load_config(args.config) if args.config else Config()
     records = run_coverage_sweep(
-        config, backbone=args.backbone, steps=args.steps,
+        config, conditions=PROTOCOL_SETS[args.protocols](),
+        backbone=args.backbone, steps=args.steps,
         lbfgs_iters=args.lbfgs_iters, seeds=tuple(args.seeds),
         use_traction=not args.no_traction, noise_level=args.noise_level,
         n_fluid=args.n_fluid)

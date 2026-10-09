@@ -52,6 +52,14 @@ from .synthesize_doppler import (
 # Canonical standard-view names per dimension.
 VIEWS_3D = ("a4c", "a2c", "plax", "psax")
 VIEWS_2D = ("apical", "lateral")
+# Non-standard / research 3D windows (not part of the standard transthoracic set).
+# ``lat_y`` is a hypothetical acoustic window whose probe apex is displaced along
+# ``+y`` so its beam carries the lateral-``y`` component that no standard view
+# observes -- used to demonstrate the acquisition lever that closes the coverage
+# gap found by the plane-coverage sweep, not a claim that such a window is
+# clinically available (it would need matrix-probe elevation steering or an extra
+# acoustic access). See ``docs/OBSERVABILITY.md``.
+EXTRA_VIEWS_3D = ("lat_y",)
 
 
 @dataclass
@@ -132,6 +140,11 @@ def standard_views_from_extents(
       * ``plax`` parasternal (probe +x); slab normal +y (long-axis plane).
       * ``psax`` parasternal (probe +x); slab normal +z (short-axis cross-section).
 
+    A non-standard 3D research window is also available by name (``lat_y`` in
+    :data:`EXTRA_VIEWS_3D`): probe displaced along ``+y`` so its beam carries the
+    lateral-``y`` component no standard view observes. It is never included in the
+    default set; request it explicitly via ``views=(..., "lat_y")``.
+
     2D views (``views`` subset of :data:`VIEWS_2D`) have ``normal=None`` (no slab,
     the whole 2D image) and only differ in apex -> beam angle:
       * ``apical``  probe below (-y).   * ``lateral`` probe to the side (+x).
@@ -143,11 +156,16 @@ def standard_views_from_extents(
     if dim == 3:
         apex_apical = (c[0], c[1], c[2] - apex_dist * e[2])
         apex_para = (c[0] + apex_dist * e[0], c[1], c[2])
+        apex_lat_y = (c[0], c[1] + apex_dist * e[1], c[2])
         spec = {
             "a4c": (apex_apical, (0.0, 1.0, 0.0)),
             "a2c": (apex_apical, (1.0, 0.0, 0.0)),
             "plax": (apex_para, (0.0, 1.0, 0.0)),
             "psax": (apex_para, (0.0, 0.0, 1.0)),
+            # Research window (see EXTRA_VIEWS_3D): apex displaced along +y so the
+            # beam carries the otherwise-unobserved lateral-y component; slab is
+            # the y-z plane (normal +x).
+            "lat_y": (apex_lat_y, (1.0, 0.0, 0.0)),
         }
         chosen = tuple(views) if views is not None else VIEWS_3D
         planes = []

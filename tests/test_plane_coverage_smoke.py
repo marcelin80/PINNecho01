@@ -7,7 +7,9 @@ import torch
 from pinnecho.config import Config
 from pinnecho.train.plane_coverage import (
     CoverageCondition,
+    PROTOCOL_SETS,
     default_coverage_conditions,
+    gap_closing_conditions,
     run_coverage_sweep,
 )
 
@@ -47,6 +49,31 @@ def test_more_views_sample_more_points():
     by = {r["name"]: r for r in recs}
     # Four complementary slabs insonify strictly more points than one plane.
     assert by["4-view"]["n_data"] > by["a4c"]["n_data"]
+
+
+def test_gap_closing_conditions_use_research_window():
+    conds = gap_closing_conditions()
+    assert PROTOCOL_SETS["gap"] is gap_closing_conditions
+    # The middle protocol adds the non-standard lat_y window to the standard pair.
+    augmented = next(c for c in conds if c.views and "lat_y" in c.views)
+    assert set(augmented.views) == {"a4c", "plax", "lat_y"}
+    # And a standard-only pair is present to contrast against.
+    assert any(c.views == ("a4c", "plax") for c in conds)
+
+
+def test_gap_sweep_runs():
+    recs = run_coverage_sweep(
+        Config(), conditions=gap_closing_conditions(), backbone="baseline",
+        steps=12, lbfgs_iters=1, seeds=(0,), use_traction=False, n_fluid=800,
+        n_wall=200, n_frames=3, verbose=False)
+    assert len(recs) == 3
+    by = {r["name"]: r for r in recs}
+    aug = next(r for r in recs if "lat_y" in r["name"])
+    pair = next(r for r in recs if r["name"].startswith("a4c+plax (standard"))
+    # The augmented protocol samples more points than the standard pair alone.
+    assert aug["n_data"] > pair["n_data"]
+    for r in recs:
+        assert math.isfinite(r["vel_relL2_v_mean"])
 
 
 def test_point_windows_cover_whole_volume():

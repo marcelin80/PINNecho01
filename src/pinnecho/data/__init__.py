@@ -31,6 +31,13 @@ from .ibfe_dataset import (
     geometric_band_template,
 )
 from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
+from .tracking_noise import (
+    TrackingNoise,
+    PRESETS as TRACKING_PRESETS,
+    resolve_tracking,
+    apply_tracking_noise,
+    relative_rms_error,
+)
 from .acquisition import (
     ImagingPlane,
     VIEWS_2D,
@@ -72,6 +79,11 @@ __all__ = [
     "band_coverage_fraction",
     "apply_forcing_control",
     "geometric_band_template",
+    "TrackingNoise",
+    "TRACKING_PRESETS",
+    "resolve_tracking",
+    "apply_tracking_noise",
+    "relative_rms_error",
     "DopplerMeasurements",
     "synthesize_doppler",
     "ImagingPlane",

@@ -126,8 +126,9 @@ def input_bounds(geometry, flow, pad: float = 1.15):
     return lows, highs
 
 
-def build_toy_dataset(config, wall_tracking_bias: float = -0.08,
-                      wall_tracking_noise: float = 0.10, seed: int = 0):
+def build_toy_dataset(config, tracking=None,
+                      wall_tracking_bias=None, wall_tracking_noise=None,
+                      seed: int = 0):
     """Build the shared synthetic-LV dataset + generator (identical for A and B).
 
     Precomputes, at the wall points:
@@ -136,13 +137,18 @@ def build_toy_dataset(config, wall_tracking_bias: float = -0.08,
     * ``wall_velocity_fsi``  -- the accurate FSI structural wall velocity (== the
       true endocardial velocity of the manufactured field), used by Model B;
     * ``wall_velocity_kin``  -- a contour-tracking estimate of the wall velocity
-      corrupted by a systematic bias + noise (segmentation / finite-difference of
-      tracked contours typically *under*-estimates peak wall speed), used by
-      Model A. This makes the kinematic-vs-FSI wall BC distinction real rather
-      than coincident, as in the true FSI setting.
+      corrupted by a named tracking-noise preset (see
+      :mod:`pinnecho.data.tracking_noise`). Model A uses this. Default is the
+      legacy ``placeholder`` pair (-8% / 10%) so published Ablation 1–6 numbers
+      stay reproducible; pass ``tracking="ste"`` for the literature calibration
+      or ``tracking="exact"`` for coincident walls.
+
+    ``tracking`` / ``wall_tracking_bias`` / ``wall_tracking_noise`` override
+    ``config.wall_tracking`` when given.
     """
     from ..data.dataset import build_dataset
     from ..data.synthetic_lv import SyntheticLVFSI
+    from ..data.tracking_noise import apply_tracking_noise, resolve_tracking
     from ..bc.boundary_conditions import fluid_traction_2d
 
     dtype = torch.get_default_dtype()
@@ -157,13 +163,18 @@ def build_toy_dataset(config, wall_tracking_bias: float = -0.08,
     dataset.extras["wall_traction"] = t_true
 
     # Diverge the two wall velocities. FSI (true) vs kinematic (tracking error).
+    wt = getattr(config, "wall_tracking", None)
+    spec = resolve_tracking(
+        tracking if tracking is not None else (wt.preset if wt is not None else None),
+        bias=wall_tracking_bias if wall_tracking_bias is not None else (
+            wt.bias if wt is not None else None),
+        noise=wall_tracking_noise if wall_tracking_noise is not None else (
+            wt.noise if wt is not None else None))
     v_fsi = dataset.wall_velocity
-    rms = float(v_fsi.pow(2).mean().sqrt().clamp_min(1e-9))
-    g = torch.Generator().manual_seed(seed + 7)
-    noise = torch.randn(v_fsi.shape, generator=g, dtype=dtype) * (wall_tracking_noise * rms)
-    v_kin = v_fsi * (1.0 + wall_tracking_bias) + noise
+    v_kin = apply_tracking_noise(v_fsi, spec, seed=seed)
     dataset.extras["wall_velocity_fsi"] = v_fsi
     dataset.extras["wall_velocity_kin"] = v_kin
+    dataset.extras["wall_tracking"] = spec
     return dataset, lv
 
 

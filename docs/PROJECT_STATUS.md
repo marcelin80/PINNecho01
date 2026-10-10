@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **113 passing** (`pytest`)
+> 테스트: **122 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -101,6 +101,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | **밴드-국소 forcing 오라클 스윕**(A/exact/shuffle/band_mask) | `train/band_oracle.py` | ✅ + 스모크 |
 | **전달형 Model B 저차원 활성화 forcing**(`f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5) | `models/activation_forcing.py` | ✅ + 단위테스트 |
 | **전달형 3-way 스윕**(A / `fsi_param` 전달물 / 오라클 상한) | `train/band_oracle.py --conditions deliverable` | ✅ + 스모크 |
+| **벽-트래킹 노이즈 프리셋**(`exact` / `placeholder` / `ste` 문헌 보정) | `data/tracking_noise.py` | ✅ + 단위테스트 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -213,7 +214,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (113 passing)
+## 6. 테스트 현황 (122 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -232,6 +233,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_forcing_oracle.py` | 밴드-국소 forcing·support-preserving 셔플·band-mask 대조·검증기 밴드율 |
 | `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
 | `test_deliverable_model_b.py` | 전달형 Model B(`fsi_param`): 저차원 활성화 모듈·기하 밴드 템플릿·백본 배선·3-way 전달형 스윕 |
+| `test_tracking_noise.py` | 벽-트래킹 프리셋(`exact`/`placeholder`/`ste`)·레거시 공식 재현·IBFE Model A 경로 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
@@ -273,9 +275,10 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 
 ## 9. 다음 단계 제안 (Ablation 6 반영, 우선순위 순)
 
-1. **관측성 논점을 독립 결과로 먼저 정리** — Ablation 3 + 초기 §4.2(다중 윈도우 병목)는
+1. **관측성 논점 독립 결과로 정리 완료** — [`docs/OBSERVABILITY.md`](OBSERVABILITY.md).
+   Ablation 3 + 초기 §4.2(다중 윈도우 병목) + 3D 평면-커버리지(표준 뷰 / `lat_y` gap-closing)는
    순환성과 완전히 무관하게 견고하다. 다중창이 속도/교차빔은 개선하나 WSS는 오히려 낮출 수
-   있다는 뉘앙스(Ablation 6)도 포함해 방법론 결과로 확정.
+   있다는 뉘앙스(Ablation 6)도 포함.
 2. **전달형 재설계 구현·사전등록 완료, 근본 제약은 유지** — 파라메트릭 능동수축 forcing을
    세 번째 백본 `fsi_param`(`f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5, 참 `f` 미접근)으로 구현하고
    **Ablation 8(전달형 3-way: A / `fsi_param` / 오라클)**로 사전 등록했다. 결과는 근본 제약을
@@ -295,6 +298,7 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
    **band-mask** 대조) 재실행. **Minimum Goal B(`dx = 1.875 mm`, 1–2 beat)는 포맷/배관
    검증용일 뿐 과학적 결론 근거가 아니다** — 이 해상도에서 밴드는 공동 체적의 43–59%만 덮으므로
    R이 뚫리기 전까지 압력 관련 결론은 이상적 상한으로만 해석한다. **단 IBAMR 실행 환경 미확보.**
-4. **baseline 노이즈 보정** — 8% bias/10% noise를 실제 speckle-tracking reproducibility
-   문헌값으로 보정, `A_exact`를 공정 기준선으로 병기.
+4. **baseline 노이즈 보정 완료** — 8%/10%는 `placeholder`(기본, Ablation 1–6 재현),
+   신규는 `tracking="ste"`(−5%/9%; Houard 2021 CV 8.9%, Farsalinos 2015). `A_exact`는
+   `tracking="exact"`. 상세: [`docs/TRACKING_NOISE.md`](TRACKING_NOISE.md).
 5. 밸브 데이터가 있으면 `predict_scalar=True`로 잔류시간 복원, 3D는 예산·다중 윈도우 상향.

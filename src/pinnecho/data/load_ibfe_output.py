@@ -400,3 +400,44 @@ def synthetic_ibfe_frames_3d(
         rho=float(config.flow.density), mu=float(config.flow.viscosity),
         spatial_dim=3,
     )
+
+
+def synthetic_active_twitch_frames(
+    config=None,
+    *,
+    segment_length: float = 0.33,
+    n_fluid: int = 4000,
+    n_wall: int = 1000,
+    n_frames: int = 8,
+    band_frac: float = 0.25,
+    seed: int = 0,
+    dtype: torch.dtype = torch.float64,
+) -> IBFEFrames:
+    """A **schema-test** 3D :class:`IBFEFrames` stand-in mimicking an early
+    ``active_twitch`` IBFE export, so the real ``load_ibfe_output`` / validator /
+    ``train_ibfe`` path can be exercised end-to-end *before* a physiological export
+    exists. It reproduces the agreed shape of that first file:
+
+    * **band-localized forcing** (``band_frac`` wall shell, zero cavity interior),
+    * **open base / no valves** -- the mitral & aortic arrays are empty ``(0, …)``,
+    * **traction on hold** -- ``traction_wall`` is shipped as all-zeros (we train
+      with ``use_traction=False``),
+    * a **short single partial segment** (``segment_length`` s, default 0.33).
+
+    This is a *format/plumbing* fixture only: like the real schema-test file it is
+    **not physically meaningful** (no valves, open base, manufactured band, partial
+    segment). Use it to confirm the contract is drop-in; do not draw any scientific
+    conclusion from a model trained on it.
+    """
+    import dataclasses as _dc
+
+    if config is None:
+        from ..config import Config
+
+        config = Config()
+    cfg = _dc.replace(config, flow=_dc.replace(config.flow, period=float(segment_length)))
+    frames = synthetic_ibfe_frames_3d(
+        cfg, n_fluid=n_fluid, n_wall=n_wall, n_frames=n_frames,
+        with_valve=False, forcing_band_frac=band_frac, seed=seed, dtype=dtype)
+    # Traction export is on hold per the export contract: ship zeros, not sigma.n.
+    return _dc.replace(frames, traction_wall=torch.zeros_like(frames.traction_wall))

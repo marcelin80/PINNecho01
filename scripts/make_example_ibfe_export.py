@@ -20,7 +20,8 @@ import torch
 
 from pinnecho.config import Config, load_config
 from pinnecho.data.load_ibfe_output import (
-    synthetic_ibfe_frames, synthetic_ibfe_frames_3d, load_ibfe_output,
+    synthetic_ibfe_frames, synthetic_ibfe_frames_3d,
+    synthetic_active_twitch_frames, load_ibfe_output,
 )
 from pinnecho.data.ibfe_io import save_ibfe_npz, save_ibfe_manifest_csv
 from pinnecho.data.ibfe_validate import validate_ibfe_frames
@@ -31,6 +32,10 @@ def main() -> None:
     ap.add_argument("--config", default=None)
     ap.add_argument("--dim", type=int, default=2, choices=[2, 3])
     ap.add_argument("--valve", action="store_true", help="include a mitral inflow patch")
+    ap.add_argument("--active-twitch", action="store_true",
+                    help="emit the active_twitch SCHEMA-TEST shape (3D, "
+                         "band-localized forcing, open base/no valves, zero "
+                         "traction, 0.33 s partial segment) -- format test only.")
     ap.add_argument("--n-frames", type=int, default=8)
     ap.add_argument("--out", default="data/ibfe_example")
     args = ap.parse_args()
@@ -40,7 +45,10 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    if args.dim == 3:
+    if args.active_twitch:
+        args.dim = 3  # the schema-test fixture is 3D by contract
+        frames = synthetic_active_twitch_frames(cfg, n_frames=args.n_frames)
+    elif args.dim == 3:
         frames = synthetic_ibfe_frames_3d(cfg, n_fluid=3000, n_wall=800,
                                           n_frames=args.n_frames, with_valve=args.valve)
     else:

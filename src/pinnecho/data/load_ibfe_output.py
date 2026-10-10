@@ -89,14 +89,20 @@ def load_ibfe_output(
     path: str,
     time_range: Optional[tuple] = None,
     subsample: Optional[int] = None,
-    spatial_dim: int = 2,
+    spatial_dim: Optional[int] = None,
     dtype: torch.dtype = torch.float64,
+    n_fluid: Optional[int] = None,
+    n_wall: Optional[int] = None,
+    seed: int = 0,
 ) -> IBFEFrames:
     """Load one cardiac cycle of IBAMR/IBFE output into :class:`IBFEFrames`.
 
     Dispatches by ``path``:
 
-    * ``*.npz``                     -> :func:`~pinnecho.data.ibfe_io.load_ibfe_npz`
+    * ``*.npz`` with ``velocity``+``mask`` -> public 4D-flow / phantom volume
+      (:func:`~pinnecho.data.public_volume.load_public_volume_npz`; ``f = 0``,
+      not an IBFE oracle)
+    * other ``*.npz``                     -> :func:`~pinnecho.data.ibfe_io.load_ibfe_npz`
     * a directory / ``*.yaml|*.yml``-> :func:`~pinnecho.data.ibfe_io.load_ibfe_manifest`
       (a directory is expected to contain ``manifest.yaml``)
 
@@ -122,7 +128,12 @@ def load_ibfe_output(
 
     p = Path(path)
     if p.suffix == ".npz":
-        frames = load_ibfe_npz(p, dtype=dtype)
+        from .public_volume import is_public_volume_npz, load_public_volume_npz
+        if is_public_volume_npz(p):
+            frames = load_public_volume_npz(
+                p, n_fluid=n_fluid, n_wall=n_wall, seed=seed, dtype=dtype)
+        else:
+            frames = load_ibfe_npz(p, dtype=dtype)
     elif p.suffix in (".yaml", ".yml"):
         frames = load_ibfe_manifest(p, dtype=dtype)
     elif p.is_dir():
@@ -139,7 +150,7 @@ def load_ibfe_output(
             ".yaml manifest, or a directory containing manifest.yaml. For Stage-1 "
             "development use synthetic_ibfe_frames(...) / synthetic_ibfe_frames_3d(...).")
 
-    if frames.spatial_dim != spatial_dim:
+    if spatial_dim is not None and frames.spatial_dim != spatial_dim:
         raise ValueError(
             f"loaded spatial_dim={frames.spatial_dim} but caller asked for "
             f"spatial_dim={spatial_dim}")

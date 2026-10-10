@@ -557,7 +557,9 @@ step-by-step [**data-preparation guide**](docs/DATA_PREPARATION.md).
   **`manifest.yaml` + per-frame CSV** directory (annotated template:
   [`configs/ibfe_manifest.template.yaml`](configs/ibfe_manifest.template.yaml)),
   plus an optional VTK/Exodus hook (`meshio`). `load_ibfe_output(path)` dispatches
-  by path type; `time_range` / `subsample` restrict/thin large meshes.
+  by path type; `time_range` / `subsample` restrict/thin large meshes. A **public
+  4D-flow / phantom volume** NPZ (`velocity` + `mask`) is a separate, non-oracle
+  path (`forcing = 0`; see [`docs/PUBLIC_VOLUME.md`](docs/PUBLIC_VOLUME.md)).
 * **Concrete example**: `python scripts/make_example_ibfe_export.py --dim {2,3}
   [--valve]` writes a filled-in export (both formats) to copy from.
 * **Validator** (`data/ibfe_validate.py`): `validate_ibfe_frames(frames)` checks

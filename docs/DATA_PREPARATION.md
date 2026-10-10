@@ -105,6 +105,35 @@ _meta   # = [cycle_period, rho, mu, spatial_dim]
 Write it with `save_ibfe_npz(frames, "bundle.npz")`, or build the arrays yourself
 and `np.savez` with exactly those keys. Load with `load_ibfe_output("bundle.npz")`.
 
+## Format 3 — public 4D-flow / phantom volume (no oracle `f`)
+
+A structured Eulerian velocity volume + cavity mask. This is what public 4D-flow
+MRI and in-vitro LV phantoms actually ship. It is **not** an IBAMR/IBFE dump:
+`forcing_fluid = 0`, `traction_wall = 0`, and `pressure_fluid = 0` unless the
+file carries `pressure`. The informative experiment is **window-count
+observability** (1/2/3 beams), not A vs `fsi_param`. Do **not** train
+`fsi_informed` — there is no oracle forcing. Full note:
+[`PUBLIC_VOLUME.md`](PUBLIC_VOLUME.md).
+
+```
+velocity   (T, Nx, Ny, Nz, 3)   m/s
+mask       (T, Nx, Ny, Nz) or (Nx, Ny, Nz)
+spacing    (3,)   m
+origin     (3,)   m
+times      (T,)   s
+pressure   (T, Nx, Ny, Nz)   Pa, optional
+_meta      [cycle_period, rho, mu, 3]
+```
+
+`load_ibfe_output("volume.npz")` dispatches on the `velocity`+`mask` keys.
+Template (synthetic LV rasterised onto a grid, not a public dataset):
+
+```bash
+python scripts/make_example_public_volume.py --out data/public_volume_example/volume.npz
+python scripts/public_volume_ab.py --which observability \
+    --volume data/public_volume_example/volume.npz --windows 1 2 3
+```
+
 ## Format 2 — manifest + per-frame CSV (for frame-by-frame exports)
 
 A `manifest.yaml` plus one CSV per field per frame. Columns are matched by

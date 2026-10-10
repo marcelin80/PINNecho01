@@ -454,6 +454,7 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
     if verbose:
         def logger(step, row):
             print(f"[ibfe {step:5d}] " + " ".join(
-                f"{k}={row[k]:.3e}" for k in ("total", "data", "pde", "bc") if k in row))
+                f"{k}={row[k]:.3e}" for k in ("total", "data", "pde", "bc") if k in row),
+                  flush=True)
     train_model(model, loss_fn, build_batches, cfg, logger=logger)
     return model, evaluate_ibfe(model, frames)

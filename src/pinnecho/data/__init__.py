@@ -31,6 +31,15 @@ from .ibfe_dataset import (
     geometric_band_template,
 )
 from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
+from .public_volume import (
+    frames_from_public_volume,
+    load_public_volume_npz,
+    save_public_volume_npz,
+    is_public_volume_npz,
+    has_oracle_forcing,
+    synthetic_public_volume_frames,
+    rasterize_synthetic_lv_3d,
+)
 from .tracking_noise import (
     TrackingNoise,
     PRESETS as TRACKING_PRESETS,
@@ -79,6 +88,13 @@ __all__ = [
     "band_coverage_fraction",
     "apply_forcing_control",
     "geometric_band_template",
+    "frames_from_public_volume",
+    "load_public_volume_npz",
+    "save_public_volume_npz",
+    "is_public_volume_npz",
+    "has_oracle_forcing",
+    "synthetic_public_volume_frames",
+    "rasterize_synthetic_lv_3d",
     "TrackingNoise",
     "TRACKING_PRESETS",
     "resolve_tracking",

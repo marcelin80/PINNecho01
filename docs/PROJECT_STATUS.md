@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **122 passing** (`pytest`)
+> 테스트: **131 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -102,6 +102,8 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | **전달형 Model B 저차원 활성화 forcing**(`f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5) | `models/activation_forcing.py` | ✅ + 단위테스트 |
 | **전달형 3-way 스윕**(A / `fsi_param` 전달물 / 오라클 상한) | `train/band_oracle.py --conditions deliverable` | ✅ + 스모크 |
 | **벽-트래킹 노이즈 프리셋**(`exact` / `placeholder` / `ste` 문헌 보정) | `data/tracking_noise.py` | ✅ + 단위테스트 |
+| **공개 4D-flow / phantom 볼륨 로더**(`f = 0`, 오라클 아님) | `data/public_volume.py` | ✅ + 단위테스트 |
+| **공개 볼륨 관측성 스윕**(창 1/2/3; A vs `fsi_param`은 음성 대조) | `train/public_volume_ab.py` | ✅ + 스모크 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -209,12 +211,14 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | 전달형 Model B 3-way 스윕 | `pinnecho-band-oracle --conditions deliverable` | `scripts/band_oracle_sweep.py --conditions deliverable` |
 | 3D 검증 | `pinnecho-train-3d` | `scripts/train_model_3d.py` |
 | 예제 IBFE export 생성 | — | `scripts/make_example_ibfe_export.py` |
+| 예제 공개 볼륨 NPZ | — | `scripts/make_example_public_volume.py` |
+| 공개 볼륨 A vs 전달형 B | `pinnecho-public-ab` | `scripts/public_volume_ab.py` |
 
 공통 옵션: `--dtype {float32,float64}`, `--steps`, `--lbfgs-iters`, `--seed`.
 
 ---
 
-## 6. 테스트 현황 (122 passing)
+## 6. 테스트 현황 (131 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -234,6 +238,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
 | `test_deliverable_model_b.py` | 전달형 Model B(`fsi_param`): 저차원 활성화 모듈·기하 밴드 템플릿·백본 배선·3-way 전달형 스윕 |
 | `test_tracking_noise.py` | 벽-트래킹 프리셋(`exact`/`placeholder`/`ste`)·레거시 공식 재현·IBFE Model A 경로 |
+| `test_public_volume.py` | 공개 4D-flow/phantom 볼륨→IBFEFrames(`f=0`)·NPZ 분기·관측성/AB 스윕 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
@@ -268,7 +273,9 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 ## 8. 남은 작업 (데이터 의존)
 
 1. **실제 IBAMR/IBFE export 연결** — 위 계약에 맞춰 `load_ibfe_output(path)`로 투입.
-   배관·검증·학습 경로는 모두 구현·테스트 완료.
+   배관·검증·학습 경로는 모두 구현·테스트 완료. 공개 4D-flow / phantom은
+   **오라클이 아닌** 별도 경로(`data/public_volume.py`, `f = 0`)로 이미 연결됨 —
+   [`docs/PUBLIC_VOLUME.md`](PUBLIC_VOLUME.md).
 2. **잔류시간 실측 복원** — 실제 승모판 유입 필드(또는 개방형 공동 합성) 필요.
    스칼라 잔차·`c` 헤드·유입 재초기화·`with_valve` 유입 점군은 완비.
 3. **고해상도 3D** — 더 큰 학습 예산 + 다중 윈도우 취득 + 실 3D 지상진값.
@@ -298,6 +305,8 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
    **band-mask** 대조) 재실행. **Minimum Goal B(`dx = 1.875 mm`, 1–2 beat)는 포맷/배관
    검증용일 뿐 과학적 결론 근거가 아니다** — 이 해상도에서 밴드는 공동 체적의 43–59%만 덮으므로
    R이 뚫리기 전까지 압력 관련 결론은 이상적 상한으로만 해석한다. **단 IBAMR 실행 환경 미확보.**
+   게이트 R을 기다리지 않고 할 수 있는 우회는 공개 4D-flow / phantom 볼륨
+   (`f = 0`)에서 전달형 A vs `fsi_param`을 돌리는 것 — 오라클 실험이 아님.
 4. **baseline 노이즈 보정 완료** — 8%/10%는 `placeholder`(기본, Ablation 1–6 재현),
    신규는 `tracking="ste"`(−5%/9%; Houard 2021 CV 8.9%, Farsalinos 2015). `A_exact`는
    `tracking="exact"`. 상세: [`docs/TRACKING_NOISE.md`](TRACKING_NOISE.md).

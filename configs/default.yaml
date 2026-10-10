@@ -1,0 +1,80 @@
+# Spec-aligned default configuration for the FSI-informed Doppler PINN.
+#
+# This file documents every knob for the modular spec layer (physics residuals,
+# multi-scale-Fourier network, composite loss, BCs, Doppler synthesis, metrics).
+# The Stage-1 demo pipeline has its own configs (baseline.yaml / fsi_informed.yaml
+# / smoke.yaml). Knobs marked TODO are consumed once the gated training stage and
+# the real IBFE loader are wired in.
+
+# --- Physical constants (dimensional; Newtonian blood) ---
+physics:
+  rho: 1060.0          # kg/m^3
+  mu: 3.5e-3           # Pa.s
+  diffusivity: 1.0e-6  # residence-time scalar D (numerical diffusion only)
+  scalar_source: 1.0   # +1 source turns the scalar into a residence-time clock
+
+# --- Backbone selection (architecture is IDENTICAL for A and B) ---
+backbone: baseline     # "baseline" (Model A, f=0) | "fsi_informed" (Model B)
+model_b:
+  # Model B options (NOT IMPLEMENTED yet -- gated on Model A success).
+  wall_bc: fsi_velocity   # "fsi_velocity" (Dirichlet from FSI) | "traction"
+  forcing: true           # add IBFE body force f to the momentum residual
+
+# --- Network (multi-scale Fourier features + MLP + heads u,v,[w],p,c) ---
+model:
+  spatial_dim: 2
+  width: 256
+  depth: 8
+  activation: tanh        # "tanh" | "sin"
+  predict_scalar: true    # add residence-time head c
+  # Multi-scale random Fourier features: B_sigma ~ N(0, sigma^2), concatenated.
+  # Set fourier_features: 0 to use a plain tanh MLP (recommended for gradient
+  # quantities -- see README Stage-1 finding).
+  fourier_features: 0     # features PER scale (0 disables encoding)
+  fourier_scales: [1.0, 10.0, 100.0]
+  # Optional per-column input bounds (x, y, [z], t) to normalise to [-1, 1]
+  # before Fourier encoding. TODO: set from the IBFE/toy domain extents.
+  input_lows: null
+  input_highs: null
+
+# --- Virtual Doppler acquisition (single-component measurements) ---
+doppler:
+  transducers: [[0.0, -0.06]]   # apex position(s); add rows for multi-window
+  v_nyquist: 0.8       # aliasing limit [m/s]
+  snr_db: 20.0         # Gaussian measurement SNR
+  sparsity: 0.5        # fraction of samples dropped (acquisition gaps)
+  dealias: false       # toggle: unwrap aliased velocities after adding them
+
+# --- Composite loss weights (all configurable) ---
+loss:
+  weights:
+    data: 1.0
+    pde: 1.0
+    scalar: 0.1
+    bc: 1.0
+    ic: 0.1
+    periodic: 0.1
+  # PDE-weight annealing: ramp w_pde from pde_start_frac -> 1 over the warmup
+  # window so the net fits data/BCs first, then physics (avoids u=0 collapse).
+  anneal:
+    enabled: true
+    pde_warmup_frac: 0.3
+    pde_start_frac: 0.0
+
+# --- Training ---
+train:
+  steps: 10000
+  lr: 2.0e-3
+  lbfgs_iters: 500     # L-BFGS polishing after Adam (0 to disable)
+  log_every: 500
+  seed: 0
+  grad_clip: null
+
+# --- Cardiac cycle / geometry ---
+cycle:
+  period: 0.8          # s (for cycle-periodicity loss); TODO: from IBFE metadata
+
+# --- Evaluation ---
+eval:
+  stagnation_threshold: 0.05   # m/s; speed below this counts as stagnant
+  spline_method: linear        # physics-free baseline interpolation

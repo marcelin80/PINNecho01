@@ -8,6 +8,7 @@
 > [`docs/results/band_oracle/`](results/band_oracle/) (Ablation 7, 밴드-국소 오라클 dry-run) ·
 > [`docs/results/deliverable_model_b/`](results/deliverable_model_b/) (Ablation 8, 전달형 Model B 3-way) ·
 > [`docs/TRACKING_NOISE.md`](TRACKING_NOISE.md) (벽-트래킹 노이즈 프리셋 / STE 문헌 보정) ·
+> [`docs/PUBLIC_VOLUME.md`](PUBLIC_VOLUME.md) (공개 4D-flow/phantom, `f = 0`, 오라클 아님) ·
 > [`docs/results/ablations.json`](results/ablations.json) (초기 2종) · 드라이버: `src/pinnecho/train/ablation.py`, `src/pinnecho/train/band_oracle.py`
 
 ## 왜 이 실험이 필요한가 (리뷰 지적 요약)

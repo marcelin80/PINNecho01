@@ -145,7 +145,14 @@ def validate_ibfe_frames(frames, strict: bool = False,
                 f"peak speed {stats['speed_max']:.2f} m/s exceeds {max_speed} m/s "
                 "-- check units (expected SI m/s)")
         if stats["forcing_absmax"] == 0.0:
-            warnings.append("forcing_fluid is all zeros -- Model B reduces to Model A")
+            if float(frames.traction_wall.abs().max()) == 0.0:
+                warnings.append(
+                    "forcing_fluid and traction_wall are all zeros -- this is a "
+                    "public 4D-flow / phantom volume, not an IBFE oracle. Compare "
+                    "baseline vs fsi_param only; do not train fsi_informed")
+            else:
+                warnings.append(
+                    "forcing_fluid is all zeros -- Model B reduces to Model A")
         elif stats["forcing_band_fraction"] > 0.7:
             warnings.append(
                 f"forcing is nonzero over {stats['forcing_band_fraction']:.0%} of fluid "

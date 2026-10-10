@@ -42,6 +42,7 @@ pinnecho-visualize = "pinnecho.train.train:visualize_main"
 pinnecho-sweep = "pinnecho.train.observability:sweep_main"
 pinnecho-coverage = "pinnecho.train.plane_coverage:coverage_main"
 pinnecho-band-oracle = "pinnecho.train.band_oracle:band_oracle_main"
+pinnecho-public-ab = "pinnecho.train.public_volume_ab:public_volume_ab_main"
 pinnecho-train-3d = "pinnecho.train.train3d:main"
 pinnecho-ablation = "pinnecho.train.ablation:main"
 

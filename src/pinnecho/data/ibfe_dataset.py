@@ -88,6 +88,18 @@ def forcing_band_mask(forcing: torch.Tensor, tol: float = 0.0) -> torch.Tensor:
     return forcing.norm(dim=1) > tol
 
 
+def band_coverage_fraction(forcing: torch.Tensor, tol: float = 0.0) -> float:
+    """Fraction of fluid points inside the forcing band (``‖f‖ > tol``).
+
+    For real IB forcing this is the share of the sampled cavity volume where the
+    FSI term is active; outside it Model B equals Model A. (At the coarse Minimum
+    Goal resolution the real band covers only ~43-59% of the cavity.)
+    """
+    if forcing.shape[0] == 0:
+        return 0.0
+    return float(forcing_band_mask(forcing, tol=tol).float().mean())
+
+
 def apply_forcing_control(forcing: torch.Tensor, coords: torch.Tensor,
                           mode: Optional[str], seed: int, dim: int) -> torch.Tensor:
     """Diagnostic forcing field for the **oracle** forcing experiment (see below).

@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **102 passing** (`pytest`)
+> 테스트: **108 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -20,6 +20,11 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
   물리 정칙화가 아니라 **궤적-특이 정보(비선형 누출)**이며, 공정한 동일-창 비교에선 WSS 우위도
   유의하지 않음. manufactured 설정에선 forcing 기반 이득(압력·구배 모두)이 본질적으로 궤적
   정보를 담는다.
+- **밴드-국소 오라클 dry-run(Ablation 7, 3시드)**: forcing을 실제처럼 벽 밴드로 국소화(공동의
+  48%만 덮음, 내부 B=A)하면 압력 이득이 사라지는 정도가 아니라 **음(-)**이 됨(relL2 1.06→13.3,
+  0/3) — full-cavity "압력 이득"은 forcing≈∇p 순환의 산물이었음을 합성 상한에서 확인. 속도
+  이득은 미미(Δ0.022)하고 support-preserving 셔플·band-mask 대조에서 baseline으로 회귀. gate R
+  후 실 export에 그대로 돌릴 `A/exact/shuffle/band_mask` 분석을 **사전 등록**.
 - **순환성과 독립적으로 남는 견고한 결과**: **관측성(다중 음향창)** — FSI 없는 baseline에서도
   교차빔 `u`가 창 수에 단조 반응(0.98→0.75), SNR·희소성은 거의 무관. 단, 다중창이 주 성분 `v`·
   WSS corr는 오히려 낮출 수 있음. 전용 정리: [`docs/OBSERVABILITY.md`](OBSERVABILITY.md).
@@ -87,6 +92,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | A/B 시각화(필드 패널 + 심장주기 GIF) | `eval/visualize.py` | ✅ + 스모크 |
 | 관측성 스윕(윈도우/SNR/희소성) | `train/observability.py` | ✅ + 스모크 |
 | **3D 평면-커버리지 관측성 스윕**(A4C/A2C/PLAX/PSAX vs 이상적 점-윈도우) | `train/plane_coverage.py` | ✅ + 스모크 |
+| **밴드-국소 forcing 오라클 스윕**(A/exact/shuffle/band_mask) | `train/band_oracle.py` | ✅ + 스모크 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -189,6 +195,8 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | A/B 비교 | `pinnecho-compare-ab` | `scripts/compare_models_ab.py` |
 | A/B 시각화 + 애니메이션 | `pinnecho-visualize` | `scripts/visualize_ab.py` |
 | 관측성 스윕 | `pinnecho-sweep` | `scripts/observability_sweep.py` |
+| 3D 평면-커버리지 스윕 | `pinnecho-coverage` | `scripts/plane_coverage_sweep.py` |
+| 밴드-국소 forcing 오라클 스윕 | `pinnecho-band-oracle` | `scripts/band_oracle_sweep.py` |
 | 3D 검증 | `pinnecho-train-3d` | `scripts/train_model_3d.py` |
 | 예제 IBFE export 생성 | — | `scripts/make_example_ibfe_export.py` |
 
@@ -196,7 +204,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (102 passing)
+## 6. 테스트 현황 (108 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -213,6 +221,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_train_model_a_smoke.py` / `test_train_3d_smoke.py` | Model A/B·3D 학습 스모크 |
 | `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |
 | `test_forcing_oracle.py` | 밴드-국소 forcing·support-preserving 셔플·band-mask 대조·검증기 밴드율 |
+| `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.

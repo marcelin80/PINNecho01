@@ -1,0 +1,130 @@
+{
+  "band_frac": 0.2,
+  "band_coverage": 0.48133334517478943,
+  "dim": 3,
+  "n_windows": 2,
+  "records": [
+    {
+      "name": "A (baseline)",
+      "backbone": "baseline",
+      "forcing_control": null,
+      "vel_relL2_speed_mean": 0.9526990254720052,
+      "vel_relL2_speed_std": 0.0019002410740036736,
+      "vel_relL2_u_mean": 0.9647893309593201,
+      "vel_relL2_u_std": 0.0035674652347402174,
+      "vel_relL2_v_mean": 0.9942106207211813,
+      "vel_relL2_v_std": 0.001957940477177115,
+      "vel_relL2_w_mean": 0.9279981454213461,
+      "vel_relL2_w_std": 0.0016768870456525394,
+      "pressure_relL2_mean": 1.0615229606628418,
+      "pressure_relL2_std": 0.021041452502552967
+    },
+    {
+      "name": "oracle-exact",
+      "backbone": "fsi_informed",
+      "forcing_control": null,
+      "vel_relL2_speed_mean": 0.9310484131177267,
+      "vel_relL2_speed_std": 0.02327775649819182,
+      "vel_relL2_u_mean": 0.9264100790023804,
+      "vel_relL2_u_std": 0.030999966650184656,
+      "vel_relL2_v_mean": 0.999783456325531,
+      "vel_relL2_v_std": 0.0036780582193291804,
+      "vel_relL2_w_mean": 0.8944503466288248,
+      "vel_relL2_w_std": 0.037239709297478434,
+      "pressure_relL2_mean": 13.282653172810873,
+      "pressure_relL2_std": 3.389242780583205
+    },
+    {
+      "name": "oracle-shuffle",
+      "backbone": "fsi_informed",
+      "forcing_control": "shuffle",
+      "vel_relL2_speed_mean": 0.9495033423105875,
+      "vel_relL2_speed_std": 0.004196277000073183,
+      "vel_relL2_u_mean": 0.9623791575431824,
+      "vel_relL2_u_std": 0.0067317685259943,
+      "vel_relL2_v_mean": 0.9929308096567789,
+      "vel_relL2_v_std": 0.0010614334909024082,
+      "vel_relL2_w_mean": 0.9235609769821167,
+      "vel_relL2_w_std": 0.005880390325715174,
+      "pressure_relL2_mean": 3.0851897398630777,
+      "pressure_relL2_std": 0.5966612540985133
+    },
+    {
+      "name": "oracle-band_mask",
+      "backbone": "fsi_informed",
+      "forcing_control": "band_mask",
+      "vel_relL2_speed_mean": 0.9588415225346884,
+      "vel_relL2_speed_std": 0.00777212227859245,
+      "vel_relL2_u_mean": 0.9639285206794739,
+      "vel_relL2_u_std": 0.00697984684344567,
+      "vel_relL2_v_mean": 0.9937908053398132,
+      "vel_relL2_v_std": 0.0039031266934213007,
+      "vel_relL2_w_mean": 0.939287006855011,
+      "vel_relL2_w_std": 0.010254652454762508,
+      "pressure_relL2_mean": 1.6616919835408528,
+      "pressure_relL2_std": 0.3588016568607209
+    }
+  ],
+  "contrasts": {
+    "exact_vs_baseline": {
+      "pressure_relL2": {
+        "mean_diff": -12.221130212148031,
+        "std_diff": 4.147088233235627,
+        "t_stat": -5.104212223823382,
+        "n_wins": 0.0,
+        "n": 3.0,
+        "sign_p_one_sided": 1.0,
+        "sign_p_two_sided": 0.25
+      },
+      "vel_relL2_speed": {
+        "mean_diff": 0.021650612354278564,
+        "std_diff": 0.026309649676114343,
+        "t_stat": 1.4253310505549552,
+        "n_wins": 3.0,
+        "n": 3.0,
+        "sign_p_one_sided": 0.125,
+        "sign_p_two_sided": 0.25
+      }
+    },
+    "exact_vs_shuffle": {
+      "pressure_relL2": {
+        "mean_diff": -10.197463432947794,
+        "std_diff": 4.029845389280009,
+        "t_stat": -4.382928640680925,
+        "n_wins": 0.0,
+        "n": 3.0,
+        "sign_p_one_sided": 1.0,
+        "sign_p_two_sided": 0.25
+      },
+      "vel_relL2_speed": {
+        "mean_diff": 0.01845492919286092,
+        "std_diff": 0.023388335549498863,
+        "t_stat": 1.3667015741445574,
+        "n_wins": 3.0,
+        "n": 3.0,
+        "sign_p_one_sided": 0.125,
+        "sign_p_two_sided": 0.25
+      }
+    },
+    "exact_vs_band_mask": {
+      "pressure_relL2": {
+        "mean_diff": -11.62096118927002,
+        "std_diff": 4.1042138332774165,
+        "t_stat": -4.90425110149011,
+        "n_wins": 0.0,
+        "n": 3.0,
+        "sign_p_one_sided": 1.0,
+        "sign_p_two_sided": 0.25
+      },
+      "vel_relL2_speed": {
+        "mean_diff": 0.02779310941696167,
+        "std_diff": 0.019141429232103737,
+        "t_stat": 2.514915528343121,
+        "n_wins": 3.0,
+        "n": 3.0,
+        "sign_p_one_sided": 0.125,
+        "sign_p_two_sided": 0.25
+      }
+    }
+  }
+}

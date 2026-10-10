@@ -6,6 +6,7 @@
 > [`docs/results/ablation5.json`](results/ablation5.json) (Ablation 5) ·
 > [`docs/results/ablation6.json`](results/ablation6.json) (Ablation 6, 5시드 셔플) ·
 > [`docs/results/band_oracle/`](results/band_oracle/) (Ablation 7, 밴드-국소 오라클 dry-run) ·
+> [`docs/results/deliverable_model_b/`](results/deliverable_model_b/) (Ablation 8, 전달형 Model B 3-way) ·
 > [`docs/results/ablations.json`](results/ablations.json) (초기 2종) · 드라이버: `src/pinnecho/train/ablation.py`, `src/pinnecho/train/band_oracle.py`
 
 ## 왜 이 실험이 필요한가 (리뷰 지적 요약)
@@ -388,6 +389,64 @@ compute-limited(모든 조건 speed≈0.93–0.96), traction 미주입, 합성 m
 
 ---
 
+## Ablation 8 — 전달형(deliverable) Model B 3-way: 참 forcing 없이 저차원 활성화 ansatz만 (사전 등록)
+
+**동기**: Ablation 7은 forcing을 **오라클**(참 밴드 forcing을 그대로 주입)로 쓴 **상한** 실험이다.
+그러나 임상 전달형 Model B는 참 `f`를 **절대 볼 수 없다**(에코에서 측정 불가). 전달형 B가 쓸 수
+있는 입력은 벽 운동학(벽속도)과 **저차원 활성화 파라미터**뿐이다. 이 ablation은 바로 그 전달형
+B를 코드로 구현(`backbone="fsi_param"`)해 세 조건을 **같은** 밴드-국소 지상진값에서 대조한다:
+`A(baseline)`(운동학 벽, forcing 無) / `B-deliverable (fsi_param)`(벽 운동학 + 5-파라미터
+활성화 ansatz, **참 f 미접근**) / `oracle-exact`(참 밴드 forcing = 도달 가능한 상한).
+
+전달형 B의 forcing 모델은 `f(x,t) = T_max · g(t) · w(x) · d̂(x)`로, 학습 자유도는 **5개뿐**이다:
+학습형 진폭 `T_max`(1), 저차원 시간 활성화 `g(t)`의 sin/cos 하모닉 계수(2·2=4). `w(x)`(기하 밴드
+가중)와 `d̂(x)`(기하 내향 단위벡터)는 벽 기하에서 **고정**이며 참 forcing을 보지 않는다
+(`ActivationForcing`, `geometric_band_template`).
+
+**설정**: dim=3, `band_frac=0.2` → 밴드가 샘플 공동 체적의 **49.5%**를 덮음(나머지는 B=A).
+3시드, 1200 step + L-BFGS 150, 2 point-window, traction 미주입, float32.
+
+| 조건 | speed (↓) | u (↓) | w (↓) | pressure relL2 (↓) |
+|---|---|---|---|---|
+| `A (baseline)` | 0.956 ±0.003 | 0.972 | 0.934 | **1.15 ±0.11** |
+| `B-deliverable (fsi_param)` | 0.956 ±0.003 | 0.972 | 0.933 | **1.13 ±0.07** |
+| `oracle-exact` (참 밴드 forcing, 상한) | 0.909 ±0.033 | 0.905 | 0.861 | **10.00 ±1.54** |
+
+paired(3시드, +Δ ⇒ 뒤 조건 오차가 더 낮음):
+
+| 비교 | pressure: Δ (t, 승, 부호 p₁) | speed: Δ (t, 승, 부호 p₁) |
+|---|---|---|
+| `deliverable − baseline` | +0.025 (t=1.05, 2/3, p₁=0.500) | +0.000 (t=0.26, 1/3, p₁=0.875) |
+| `oracle − deliverable` | **−8.88 (t=−8.42, 0/3, p₁=1.000)** | +0.047 (t=2.15, 3/3, p₁=0.125) |
+
+**해석 — 세 가지 결론.**
+
+1. **전달형 Model B ≈ Model A.** 참 `f` 없이 5-파라미터 활성화 ansatz만 쓰면 전달형 B는 모든
+   지표에서 baseline과 **구별되지 않는다**(speed Δ=0.000, pressure Δ=+0.025, 둘 다 유의하지
+   않음). 밴드 밖 공동 52%는 정의상 B=A이고, 밴드 안에서도 저차원 ansatz가 더해줄 수 있는
+   재구성 정보가 사실상 없다. → **합성 상한에서조차 전달형 B는 A를 이기지 못한다.**
+2. **오라클의 "속도 이득"은 전달형이 접근 불가.** 참 forcing은 벽 근방 속도를 약간 개선하지만
+   (w 0.934→0.861, speed 3/3 승이나 n=3 p₁=0.125로 검정력 부족), 이 이득의 원천은 참 `f`가
+   담은 궤적 정보이며 전달형 B의 입력에는 없다. 전달형 B가 그 간극을 **메우지 못한다**는 것이
+   `oracle − deliverable` speed Δ=+0.047(3/3)로 드러난다.
+3. **오라클의 "압력"은 이득이 아니라 큰 벌점.** 참 밴드 forcing은 압력 relL2를 1.13→10.00으로
+   **악화**시킨다(0/3 승, t=−8.4). Ablation 7과 동일한 메커니즘(관측 없는 내부가 밴드의 coherent
+   forcing을 균형잡지 못해 허위 압력 발생)이며, 상한조차 압력에서는 음(−)이다.
+
+**결론**: 전달형 조건(참 `f` 미접근 + 밴드-국소)에 맞추면 Model B의 재구성 이득은 **측정되지
+않으며**(≈ Model A), 오라클에서만 나타나는 미미한 속도 이득은 (a) 압력 벌점을 동반하고 (b)
+전달형이 도달할 수 없는 양이다. 이 스윕은 gate R 통과 후 실 export에 **그대로** 돌릴
+A/deliverable/oracle 3-way 분석을 사전 등록한다. 원자료·그림:
+[`docs/results/deliverable_model_b/`](results/deliverable_model_b/). 재현:
+`python scripts/band_oracle_sweep.py --conditions deliverable --dim 3 --band-frac 0.2 --steps 1200 --seeds 0 1 2 --out docs/results/deliverable_model_b`.
+
+*한계*: 3시드(검정력 부족), 합성 manufactured 밴드(실 IB_4 커널 밴드와 형태 상이 가능), 활성화
+ansatz는 단일 시간 활성화 `g(t)`·단일 진폭의 **최소** 형태(실제 전달형은 더 풍부한 파라미터화가
+가능하나, 그래도 참 `f`는 보지 않음), 속도는 CPU 예산에서 compute-limited. 절대 수치가 아니라
+**조건 간 대조**가 결과다.
+
+---
+
 ## 결론 및 권고
 
 1. **"FSI-informed가 압력을 개선한다"는 원래 주장은 죽었다.** Check 0(순환 상관 0.95) +
@@ -396,6 +455,10 @@ compute-limited(모든 조건 speed≈0.93–0.96), traction 미주입, 합성 m
    관측 확보의 문제이지, "FSI 물리항"의 공로가 아니다. **Ablation 7(밴드-국소 오라클 dry-run)**은
    이를 더 강하게 못박는다: forcing을 실제처럼 밴드-국소화하면 압력 이득은 사라지는 정도가
    아니라 **음(-)**이 된다(relL2 1.06→13.3) — full-cavity "이득"은 forcing≈∇p 순환의 산물이었다.
+   **Ablation 8(전달형 Model B 3-way)**은 임상적으로 가장 중요한 못을 박는다: 참 `f`를 볼 수
+   없는 전달형 B(벽 운동학 + 5-파라미터 활성화 ansatz)는 합성 상한에서조차 **Model A와
+   구별되지 않으며**(speed Δ=0.000, pressure Δ=+0.025, 유의하지 않음), 오라클에서만 나타나는
+   미미한 속도 이득은 전달형이 **접근할 수 없는** 양이다.
 2. **"구배량은 FSI로 음향창을 대체한다"는 실용적 주장도 (이 합성 설정에서는) 성립하지 않는다.**
    Ablation 6 셔플 진단이 결정적이다: 궤적-무관 forcing은 이득을 유지하지 못하고 해치며
    `forcing_exact > forcing_shuffled`이므로, 구배 이득은 **일반적 물리 정칙화가 아니라 궤적-특이

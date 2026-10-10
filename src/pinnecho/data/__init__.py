@@ -28,6 +28,7 @@ from .ibfe_dataset import (
     forcing_band_mask,
     band_coverage_fraction,
     apply_forcing_control,
+    geometric_band_template,
 )
 from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
 from .acquisition import (
@@ -70,6 +71,7 @@ __all__ = [
     "forcing_band_mask",
     "band_coverage_fraction",
     "apply_forcing_control",
+    "geometric_band_template",
     "DopplerMeasurements",
     "synthesize_doppler",
     "ImagingPlane",

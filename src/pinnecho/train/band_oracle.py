@@ -56,6 +56,12 @@ CONTRASTS = {
     "exact_vs_band_mask": ("oracle-band_mask", "oracle-exact"),
 }
 
+# Contrasts for the deliverable 3-way (A / deliverable fsi_param / oracle).
+DELIVERABLE_CONTRASTS = {
+    "deliverable_vs_baseline": ("A (baseline)", "B-deliverable (fsi_param)"),
+    "oracle_vs_deliverable": ("B-deliverable (fsi_param)", "oracle-exact"),
+}
+
 
 @dataclass
 class OracleCondition:
@@ -77,6 +83,27 @@ def default_oracle_conditions() -> List[OracleCondition]:
     ]
 
 
+def deliverable_conditions() -> List[OracleCondition]:
+    """The deliverable 3-way: Model A, the deliverable Model B (``fsi_param``:
+    wall kinematics + low-dim activation ansatz, no true ``f``), and the oracle
+    (true ``f``) as the achievable upper bound."""
+    return [
+        OracleCondition("A (baseline)", backbone="baseline"),
+        OracleCondition("B-deliverable (fsi_param)", backbone="fsi_param"),
+        OracleCondition("oracle-exact", backbone="fsi_informed"),
+    ]
+
+
+CONDITION_SETS = {
+    "oracle": default_oracle_conditions,
+    "deliverable": deliverable_conditions,
+}
+CONTRAST_SETS = {
+    "oracle": CONTRASTS,
+    "deliverable": DELIVERABLE_CONTRASTS,
+}
+
+
 def run_oracle_one(frames, cond: OracleCondition, steps: int, lbfgs_iters: int,
                    lr: float, seed: int, use_traction: bool, noise_level: float,
                    n_windows: int) -> Dict[str, float]:
@@ -92,6 +119,7 @@ def run_oracle_one(frames, cond: OracleCondition, steps: int, lbfgs_iters: int,
 
 def run_band_oracle_sweep(config=None, frames=None,
                           conditions: Optional[Sequence[OracleCondition]] = None,
+                          contrasts: Optional[Dict] = None,
                           dim: int = 3, band_frac: float = 0.25,
                           steps: int = 1500, lbfgs_iters: int = 150, lr: float = 2e-3,
                           seeds: Sequence[int] = (0, 1, 2),
@@ -136,8 +164,9 @@ def run_band_oracle_sweep(config=None, frames=None,
         records.append(rec)
 
     from .ablation import _paired_stats
-    contrasts: Dict[str, Dict] = {}
-    for cname, (a_name, b_name) in CONTRASTS.items():
+    contrast_defs = contrasts if contrasts is not None else CONTRASTS
+    contrast_out: Dict[str, Dict] = {}
+    for cname, (a_name, b_name) in contrast_defs.items():
         if a_name not in per_cond or b_name not in per_cond:
             continue
         entry: Dict[str, Dict[str, float]] = {}
@@ -145,11 +174,11 @@ def run_band_oracle_sweep(config=None, frames=None,
             a = [d.get(metric, np.nan) for d in per_cond[a_name]]
             b = [d.get(metric, np.nan) for d in per_cond[b_name]]
             entry[metric] = _paired_stats(a, b, higher_better=True)
-        contrasts[cname] = entry
+        contrast_out[cname] = entry
 
     return {"band_frac": float(band_frac), "band_coverage": float(coverage),
             "dim": int(dim), "n_windows": int(n_windows),
-            "records": records, "contrasts": contrasts}
+            "records": records, "contrasts": contrast_out}
 
 
 def plot_band_oracle(result: Dict, out_path, metric: str = "pressure_relL2"):
@@ -163,18 +192,23 @@ def plot_band_oracle(result: Dict, out_path, metric: str = "pressure_relL2"):
     names = [r["name"] for r in records]
     means = [r[f"{metric}_mean"] for r in records]
     stds = [r[f"{metric}_std"] for r in records]
-    colors = ["#55a868" if r["backbone"] == "baseline" else
-              ("#4c72b0" if r["forcing_control"] is None else "#c44e52")
-              for r in records]
+    def _color(r):
+        if r["backbone"] == "baseline":
+            return "#55a868"
+        if r["backbone"] == "fsi_param":
+            return "#dd8452"
+        return "#4c72b0" if r["forcing_control"] is None else "#c44e52"
+
+    colors = [_color(r) for r in records]
     x = np.arange(len(names))
     fig, ax = plt.subplots(figsize=(1.7 * len(names) + 2, 5))
     ax.bar(x, means, yerr=stds, capsize=4, color=colors)
     ax.set_xticks(x)
     ax.set_xticklabels(names, rotation=20, ha="right")
     ax.set_ylabel(f"{metric} (relative L2, lower is better)")
-    ax.set_title(f"Band-localized oracle forcing "
+    ax.set_title(f"Band-localized forcing "
                  f"(band covers {result['band_coverage']:.0%} of cavity; "
-                 f"green=A, blue=exact oracle, red=controls)")
+                 f"green=A, orange=deliverable B, blue=oracle, red=controls)")
     ax.grid(True, axis="y", alpha=0.3)
     fig.tight_layout()
     out_path = Path(out_path)
@@ -194,6 +228,9 @@ def band_oracle_main() -> None:  # pragma: no cover - CLI wiring
         description="Band-localized forcing oracle dry-run (A / exact / shuffle / "
                     "band-mask) on synthetic data.")
     ap.add_argument("--config", default=None)
+    ap.add_argument("--conditions", default="oracle", choices=sorted(CONDITION_SETS),
+                    help="'oracle' (A/exact/shuffle/band_mask) or 'deliverable' "
+                         "(A / fsi_param deliverable Model B / oracle upper bound).")
     ap.add_argument("--dim", type=int, default=3, choices=[2, 3])
     ap.add_argument("--band-frac", type=float, default=0.25,
                     help="wall-band thickness in normalised radius (0..1).")
@@ -213,7 +250,9 @@ def band_oracle_main() -> None:  # pragma: no cover - CLI wiring
     torch.set_default_dtype(torch.float64 if args.dtype == "float64" else torch.float32)
     config = load_config(args.config) if args.config else Config()
     result = run_band_oracle_sweep(
-        config, dim=args.dim, band_frac=args.band_frac, steps=args.steps,
+        config, conditions=CONDITION_SETS[args.conditions](),
+        contrasts=CONTRAST_SETS[args.conditions],
+        dim=args.dim, band_frac=args.band_frac, steps=args.steps,
         lbfgs_iters=args.lbfgs_iters, seeds=tuple(args.seeds),
         use_traction=args.traction, noise_level=args.noise_level,
         n_fluid=args.n_fluid, n_windows=args.n_windows)

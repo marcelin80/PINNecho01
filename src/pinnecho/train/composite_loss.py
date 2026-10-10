@@ -96,7 +96,9 @@ class CompositeLoss:
     anneal: AnnealSchedule = field(default_factory=AnnealSchedule)
     diffusivity: float = 1e-6
     scalar_source: float = 1.0
-    forcing: Optional[str] = None  # None (Model A) or "fsi" (Model B forcing)
+    # None (Model A) | "fsi" (oracle: true IB forcing from the batch) | "param"
+    # (deliverable Model B: low-dim activation ansatz via model.activation_forcing).
+    forcing: Optional[str] = None
     # Wall BC source for Model B: "kinematic" (contour dc/dt) or "fsi" (FSI
     # structural wall velocity). Both use the "wall" batch's u_wall target.
     wall_mode: str = "kinematic"
@@ -154,7 +156,16 @@ class CompositeLoss:
             X = b["X"].requires_grad_(True)
             f = model.fields(X)
             vel = [f[k] for k in (["u", "v", "w"][: model.spatial_dim])]
-            forcing = b.get("forcing") if self.forcing == "fsi" else None
+            if self.forcing == "fsi":
+                forcing = b.get("forcing")
+            elif self.forcing == "param":
+                # Deliverable Model B: forcing comes from the low-dim activation
+                # ansatz with a geometric band template -- never the true f.
+                t = X[:, model.spatial_dim:model.spatial_dim + 1]
+                forcing = model.activation_forcing(
+                    t, b["forcing_template_dir"], b["forcing_template_w"])
+            else:
+                forcing = None
             cont, mom = navier_stokes_residual_nd(
                 vel, f["p"], X, self.rho, self.mu, forcing=forcing
             )

@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **108 passing** (`pytest`)
+> 테스트: **113 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -56,6 +56,12 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 > B 입력이 아니다** — 임상 에코에선 얻을 수 없다. 전달 가능한 Model B의 입력은 **벽
 > 운동학(벽속도) + 저차원 활성화 파라미터(`T_max`, 타이밍 `g(t)`)**뿐이고, `f`를 학습에
 > 넣는 것은 "forcing을 알았다면" 상한을 재는 **오라클 실험**이다.
+>
+> **전달형 Model B(`fsi_param`) 구현됨.** 그 전달형 입력 조건(`f` 미접근 + 저차원 활성화
+> ansatz `f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5개; `models/activation_forcing.py`)을 세 번째
+> 백본 `fsi_param`으로 구현했다. 밴드-국소 합성 상한에서 전달형 B는 **Model A와 구별되지
+> 않으며**(Ablation 8), 오라클에서만 나타나는 미미한 속도 이득은 전달형이 **접근할 수 없는**
+> 양이다. 즉 `fsi_informed`는 오라클(참 `f`) 상한, `fsi_param`은 임상 전달물이다.
 
 ---
 
@@ -93,6 +99,8 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | 관측성 스윕(윈도우/SNR/희소성) | `train/observability.py` | ✅ + 스모크 |
 | **3D 평면-커버리지 관측성 스윕**(A4C/A2C/PLAX/PSAX vs 이상적 점-윈도우) | `train/plane_coverage.py` | ✅ + 스모크 |
 | **밴드-국소 forcing 오라클 스윕**(A/exact/shuffle/band_mask) | `train/band_oracle.py` | ✅ + 스모크 |
+| **전달형 Model B 저차원 활성화 forcing**(`f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5) | `models/activation_forcing.py` | ✅ + 단위테스트 |
+| **전달형 3-way 스윕**(A / `fsi_param` 전달물 / 오라클 상한) | `train/band_oracle.py --conditions deliverable` | ✅ + 스모크 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -197,6 +205,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | 관측성 스윕 | `pinnecho-sweep` | `scripts/observability_sweep.py` |
 | 3D 평면-커버리지 스윕 | `pinnecho-coverage` | `scripts/plane_coverage_sweep.py` |
 | 밴드-국소 forcing 오라클 스윕 | `pinnecho-band-oracle` | `scripts/band_oracle_sweep.py` |
+| 전달형 Model B 3-way 스윕 | `pinnecho-band-oracle --conditions deliverable` | `scripts/band_oracle_sweep.py --conditions deliverable` |
 | 3D 검증 | `pinnecho-train-3d` | `scripts/train_model_3d.py` |
 | 예제 IBFE export 생성 | — | `scripts/make_example_ibfe_export.py` |
 
@@ -204,7 +213,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (108 passing)
+## 6. 테스트 현황 (113 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -222,6 +231,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |
 | `test_forcing_oracle.py` | 밴드-국소 forcing·support-preserving 셔플·band-mask 대조·검증기 밴드율 |
 | `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
+| `test_deliverable_model_b.py` | 전달형 Model B(`fsi_param`): 저차원 활성화 모듈·기하 밴드 템플릿·백본 배선·3-way 전달형 스윕 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
@@ -266,13 +276,18 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 1. **관측성 논점을 독립 결과로 먼저 정리** — Ablation 3 + 초기 §4.2(다중 윈도우 병목)는
    순환성과 완전히 무관하게 견고하다. 다중창이 속도/교차빔은 개선하나 WSS는 오히려 낮출 수
    있다는 뉘앙스(Ablation 6)도 포함해 방법론 결과로 확정.
-2. **재설계는 근본 제약을 안고 진행** — 파라메트릭 능동수축 forcing도 *그 궤적을 재현하는 한*
-   Ablation 6가 보인 궤적-특이 누출을 피하기 어렵다. 따라서 재설계 검증은 상관 게이트
-   (`--which coupling`)뿐 아니라 **셔플 진단(`--which forcing-shuffle`)까지 통과**해야 한다.
-   다만 실 IBFE forcing조차 깨끗한 분리자가 아니다 — **밴드-국소**(공동 내부 0 ⇒ 밴드 밖 B=A)
-   이고 u에서 독립적이지 않으므로(궤적 정보 3경로), 실 forcing 실험은 **오라클**(forcing을
-   알았다면의 상한, 평가 전용)로만 성립한다. 전달물 Model B의 입력은 **벽 운동학 + 저차원
-   활성화 파라미터**뿐이고 `f`는 임상 에코에서 얻을 수 없다.
+2. **전달형 재설계 구현·사전등록 완료, 근본 제약은 유지** — 파라메트릭 능동수축 forcing을
+   세 번째 백본 `fsi_param`(`f = T_max·g(t)·w(x)·d̂(x)`, 자유도 5, 참 `f` 미접근)으로 구현하고
+   **Ablation 8(전달형 3-way: A / `fsi_param` / 오라클)**로 사전 등록했다. 결과는 근본 제약을
+   재확인한다: 밴드-국소 합성 상한에서 전달형 B는 **Model A와 구별되지 않으며**(speed Δ=0.000,
+   pressure Δ=+0.025, 유의하지 않음), 오라클에서만 나타나는 미미한 속도 이득은 전달형이 접근할
+   수 없다. 즉 파라메트릭 forcing도 *그 궤적을 재현하지 못하는 한* 이득이 없고, 재현하면
+   Ablation 6의 궤적-특이 누출로 돌아간다. 재설계 검증은 상관 게이트(`--which coupling`) +
+   **셔플 진단(`--which forcing-shuffle`)**을 모두 통과해야 한다. 실 IBFE forcing조차 깨끗한
+   분리자가 아니며 — **밴드-국소**(공동 내부 0 ⇒ 밴드 밖 B=A)이고 u에서 독립적이지 않으므로
+   (궤적 정보 3경로) — 실 forcing 실험은 **오라클**(평가 전용 상한)로만 성립한다. 전달물
+   Model B(`fsi_param`)의 입력은 **벽 운동학 + 저차원 활성화 파라미터**뿐이고 `f`는 임상
+   에코에서 얻을 수 없다.
 3. **실제로 푼 FSI 지상진값 확보(핵심 관문)** — 선행 관문은 **해상도 게이트 R**
    (`dx = 0.94 mm`, 짧은 수렴 세그먼트, 클라우드; *아직 미실행*)이다. ("AMR 3레벨"이 아니라
    이 수렴 게이트가 기준.) R 통과 후 심박 1주기 IBFE export → NPZ/매니페스트 →

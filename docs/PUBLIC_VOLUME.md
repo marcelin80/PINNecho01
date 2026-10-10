@@ -9,9 +9,11 @@ not give pressure. PINNecho consumes them as :class:`IBFEFrames` with
 * `traction_wall = 0`
 * `pressure_fluid = 0` unless the volume actually carries `p`
 
-so a **baseline vs deliverable-B (`fsi_param`)** comparison can run on a
-non-manufactured 3D field. Do **not** train `fsi_informed` on these frames:
-the oracle is absent by construction.
+so PINNecho can run on a non-manufactured 3D field. The *informative*
+question is **observability** (window count), not A vs `fsi_param`. Ablation 8
+already showed those two are indistinguishable without true `f`; repeating
+that comparison here is a negative control, not a new claim. Do **not** train
+`fsi_informed`: the oracle is absent by construction.
 
 > Module: `pinnecho.data.public_volume`
 > (`frames_from_public_volume`, `load_public_volume_npz`,
@@ -24,14 +26,21 @@ the oracle is absent by construction.
 Gate R / a real IBAMR export is blocked on the upstream solver. The echo
 patient and the CMR/FSI patient are already not the same person, so a
 **method** ground truth does not have to come from the in-house cardiac-4D
-pipeline. What public data can answer *now* is the deliverable question
-(Ablation 8) on a field that is **not** a manufactured NS solution:
+pipeline. What public 4D-flow can answer *now* is the **observability**
+question, which so far exists only on manufactured data
+([`OBSERVABILITY.md`](OBSERVABILITY.md)):
 
-> On a real-ish 3D velocity volume, with no access to `f`, does `fsi_param`
-> beat kinematic Model A?
+> Treat the 3-component 4D-flow velocity as GT. Project it into
+> single-component synthetic Doppler from 1 / 2 / 3 beam directions. Does
+> the unobserved (cross-beam) component recover as windows are added?
 
-That is the clinical input contract (beam-projected Doppler + wall kinematics).
-The oracle-forcing question waits for a solver-native `f`.
+That comparison is free of the manufactured `forcing ≈ ∇p` circularity.
+Pressure is **not** a metric (4D-flow does not measure `p`). A vs
+`fsi_param` (`--which ab`) is optional plumbing / a negative control.
+The oracle-forcing question waits for solver-native `f`.
+
+The volume must cover the **LV cavity**. Thoracic-aorta 4D-flow is the wrong
+anatomy for this experiment.
 
 ## On-disk contract
 
@@ -54,9 +63,13 @@ wall velocity is the fluid velocity on those voxels (no-slip proxy).
 # format template (synthetic LV rasterised onto a grid -- not a public dataset)
 python scripts/make_example_public_volume.py --out data/public_volume_example/volume.npz
 
-# drop in a real conversion of the same keys, then:
-python scripts/public_volume_ab.py --volume path/to/volume.npz \
-    --steps 800 --seeds 0 1 2 --out docs/results/public_volume
+# primary question: window-count observability (prints loss as it trains)
+python scripts/public_volume_ab.py --which observability \
+    --volume path/to/volume.npz --windows 1 2 3 --steps 800 --seeds 0 1 2 \
+    --out docs/results/public_volume
+
+# optional negative control (Ablation 8 already answered this)
+python scripts/public_volume_ab.py --which ab --volume path/to/volume.npz
 ```
 
 `validate_ibfe_frames` warns that `f` and traction are zero and that this is a

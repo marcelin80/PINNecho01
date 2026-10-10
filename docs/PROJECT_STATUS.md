@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **130 passing** (`pytest`)
+> 테스트: **131 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -103,7 +103,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | **전달형 3-way 스윕**(A / `fsi_param` 전달물 / 오라클 상한) | `train/band_oracle.py --conditions deliverable` | ✅ + 스모크 |
 | **벽-트래킹 노이즈 프리셋**(`exact` / `placeholder` / `ste` 문헌 보정) | `data/tracking_noise.py` | ✅ + 단위테스트 |
 | **공개 4D-flow / phantom 볼륨 로더**(`f = 0`, 오라클 아님) | `data/public_volume.py` | ✅ + 단위테스트 |
-| **공개 볼륨 A vs `fsi_param` 스윕** | `train/public_volume_ab.py` | ✅ + 스모크 |
+| **공개 볼륨 관측성 스윕**(창 1/2/3; A vs `fsi_param`은 음성 대조) | `train/public_volume_ab.py` | ✅ + 스모크 |
 | 3D 엔드투엔드 드라이버 | `train/train3d.py` | ✅ + 스모크 |
 | **실 IBFE I/O**(NPZ·매니페스트/CSV·VTK) | `data/ibfe_io.py` | ✅ + 단위테스트 |
 | **IBFE 검증기** | `data/ibfe_validate.py` | ✅ + 단위테스트 |
@@ -218,7 +218,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (130 passing)
+## 6. 테스트 현황 (131 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -238,7 +238,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
 | `test_deliverable_model_b.py` | 전달형 Model B(`fsi_param`): 저차원 활성화 모듈·기하 밴드 템플릿·백본 배선·3-way 전달형 스윕 |
 | `test_tracking_noise.py` | 벽-트래킹 프리셋(`exact`/`placeholder`/`ste`)·레거시 공식 재현·IBFE Model A 경로 |
-| `test_public_volume.py` | 공개 4D-flow/phantom 볼륨→IBFEFrames(`f=0`)·NPZ 분기·A vs `fsi_param` 스윕 |
+| `test_public_volume.py` | 공개 4D-flow/phantom 볼륨→IBFEFrames(`f=0`)·NPZ 분기·관측성/AB 스윕 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.

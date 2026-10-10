@@ -18,7 +18,9 @@ from pinnecho.data.ibfe_dataset import train_ibfe
 from pinnecho.data.public_volume import (
     frames_from_public_volume, rasterize_synthetic_lv_3d,
 )
-from pinnecho.train.public_volume_ab import run_public_volume_ab
+from pinnecho.train.public_volume_ab import (
+    run_public_volume_ab, run_public_volume_observability,
+)
 
 torch.set_default_dtype(torch.float32)
 
@@ -109,6 +111,19 @@ def test_public_volume_ab_sweep_smoke():
     assert "deliverable_vs_baseline" in res["contrasts"]
     for r in res["records"]:
         assert math.isfinite(r["vel_relL2_speed_mean"])
+        assert math.isnan(r["pressure_relL2_mean"])
+
+
+def test_public_volume_observability_sweep_smoke():
+    frames = synthetic_public_volume_frames(
+        Config(), nx=10, ny=10, nz=12, n_frames=2, n_fluid=500, n_wall=120)
+    res = run_public_volume_observability(
+        frames, windows=(1, 2), steps=8, lbfgs_iters=1, seeds=(0,),
+        verbose=False)
+    assert res["which"] == "observability"
+    assert [r["n_windows"] for r in res["records"]] == [1, 2]
+    for r in res["records"]:
+        assert math.isfinite(r["vel_relL2_u_mean"])
         assert math.isnan(r["pressure_relL2_mean"])
 
 

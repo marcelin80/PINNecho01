@@ -14,6 +14,17 @@ Everything is loaded into a single [`IBFEFrames`](../src/pinnecho/data/load_ibfe
 bundle. You do **not** implement anything: match one of the two on-disk formats
 below and call `load_ibfe_output(path)`.
 
+> **Where this data comes from.** Everything PINNecho consumes here is **forward
+> FSI simulation output**, not measurement. The pipeline is: a *static* 3D CMR
+> (HVSMR-2.0, ECG-gated and motion-frozen — it supplies LV **geometry only**, with
+> a ~3 mm myocardial shell and a stress-free reference *assumed*) → `cmr4dmesh` LV
+> mesh (+ rule-based fibers) → IBAMR/IBFE forward FSI (active tension `T_a(t)` +
+> Windkessel/pressure BCs) → `IBFEFrames` export. The MRI gives **no** wall motion
+> and **no** velocity, so wall velocity, pressure, and forcing are all *simulation*
+> quantities; there is no measured velocity ground truth. The only real
+> measurement in the whole project is the final clinical **Doppler echo** the
+> reconstruction ultimately targets.
+
 ## Quick start
 
 ```bash
@@ -52,12 +63,17 @@ PDE collocation set):
 - `velocity_fluid` `(N_f, dim)` — fluid velocity `u` (read from the Eulerian grid,
   interpolated to the sample points).
 - `pressure_fluid` `(N_f, 1)` — fluid pressure `p`.
-- `forcing_fluid` `(N_f, dim)` — **the term that separates Model B from A.** This is
-  the net body force per unit volume the structure exerts on the fluid (active
-  contraction + elastic coupling). In IBAMR/IBFE this is the spread Lagrangian
-  force density `f = S[F]` on the Eulerian grid (the same `f` added to the fluid
-  momentum equation). Export it directly if your solver stores it; otherwise it
-  can be recovered as the momentum residual of `(u, p)`.
+- `forcing_fluid` `(N_f, dim)` — **the term that separates Model B from A, but only
+  inside a thin wall band.** This is the net body force per unit volume the
+  structure exerts on the fluid. In IBAMR/IBFE it is the spread Lagrangian force
+  density `f = S[F]` on the Eulerian grid (the same `f` added to the fluid momentum
+  equation `ρ Du/Dt = −∇p + μΔu + f`, so `f = ρ Du/Dt + ∇p − μΔu` — **not** just the
+  inertial term `ρ Du/Dt`). Because the IB kernel has compact support, `f` is
+  nonzero only in a ~3-cell shell around the endocardium and **exactly zero in the
+  cavity interior**: outside the band Model B sees no forcing and reduces to Model
+  A. Export it directly if your solver stores it; otherwise it can be recovered as
+  the band-localized momentum residual of `(u, p)`. It is **evaluation-only oracle
+  ground truth**, not a deliverable Model B input (see the diagnostic below).
 
 **Fluid–structure interface** (endocardium):
 - `coords_wall` `(N_w, dim+1)`.
@@ -142,24 +158,49 @@ missing forcing, non-unit normals).
   same `frames` (identical architecture/data/init) — the same clean ablation used
   on the synthetic case.
 
-### Run the forcing-shuffle diagnostic on real forcing (recommended)
+### Run the forcing diagnostic on real forcing (oracle experiment)
 
 On synthetic data the FSI benefit turned out to be a *trajectory* leak: the
-manufactured forcing is derived from the true `u`, so it encodes the answer
-(see [`ABLATIONS.md`](ABLATIONS.md) Ablation 6). Real IBFE forcing is
-*independently estimated* (structural solver), so the same diagnostic becomes the
-decisive test of whether the physics term genuinely helps:
+manufactured forcing is a *full-cavity* field derived from the true `u`, so it
+encodes the answer (see [`ABLATIONS.md`](ABLATIONS.md) Ablation 6).
+
+Real IBFE forcing is **not** a clean separator, for two reasons:
+
+1. **It is band-localized.** `forcing_fluid` is the structural Lagrangian force
+   spread to the Euler grid by the IB kernel, so it is nonzero only in a ~3-cell
+   wall band and **exactly zero in the cavity interior**. Outside the band Model B
+   receives no forcing signal at all, so **Model B = Model A there** — the FSI term
+   can only act on the 43–59% of the cavity volume the band covers at the Minimum
+   Goal resolution.
+2. **It is not independent of `u`.** The forcing still carries trajectory
+   information through three leakage paths: the structure moves with the
+   interpolated fluid velocity (`dX/dt = u(X)`), `f` closes the band momentum
+   balance by construction (so the NS residual there is ≈0 with the simulation's
+   own `(u, p)`), and its support marks the instantaneous wall position.
+
+Because of this, feeding `f` to the FSI backbone is an **oracle** experiment — an
+upper bound on *"what if the forcing were known"* — and `f` is **evaluation-only
+ground truth, never a deliverable Model B input** (it is unavailable in clinical
+echo; the deliverable Model B uses only wall kinematics + low-dim activation
+parameters). The diagnostic therefore uses two controls:
 
 ```python
-# fsi_informed with the true real forcing vs. a trajectory-decorrelated shuffle
+# oracle: true real forcing vs. a support-preserving time shuffle (band kept fixed,
+# interior kept zero) and a geometric band-mask-only control
 _, m_exact = train_ibfe(frames, backbone="fsi_informed", seed=s)
-_, m_shuf  = train_ibfe(frames, backbone="fsi_informed", seed=s, shuffle_forcing=True)
+_, m_shuf  = train_ibfe(frames, backbone="fsi_informed", seed=s,
+                        forcing_control="shuffle")     # permute within band only
+_, m_mask  = train_ibfe(frames, backbone="fsi_informed", seed=s,
+                        forcing_control="band_mask")   # magnitude × inward normal
 ```
 
-Repeat over several seeds and compare vorticity/WSS/pressure. If the exact-minus-
-shuffled gap that appears on synthetic data **collapses** for real forcing, the
-advantage is a genuine physics prior rather than answer injection — the claim the
-synthetic study could not establish.
+Repeat over several seeds and compare vorticity/WSS/pressure. The support-
+preserving shuffle keeps the band geometry (and interior zeros) fixed while
+destroying the time correlation, and the band-mask control keeps only the
+geometric support; a gain that survives *both* controls is the part attributable
+to genuine physics rather than trajectory information or support geometry. Even
+then the result is an oracle bound, not evidence the deliverable Model B (no `f`)
+would reproduce it.
 
 ---
 
@@ -181,7 +222,7 @@ python scripts/make_example_ibfe_export.py --dim 3 --valve --out data/ibfe_examp
 | `coords_fluid`   | `(N_f, 4)` | `x, y, z, t` |
 | `velocity_fluid` | `(N_f, 3)` | `u, v, w` |
 | `pressure_fluid` | `(N_f, 1)` | `p` |
-| `forcing_fluid`  | `(N_f, 3)` | `fx, fy, fz`  (N/m³; structure→fluid body force) |
+| `forcing_fluid`  | `(N_f, 3)` | `fx, fy, fz`  (N/m³; IB-spread structure→fluid force, **band-localized**: zero in cavity interior) |
 | `coords_wall`    | `(N_w, 4)` | `x, y, z, t` |
 | `normals_wall`   | `(N_w, 3)` | `nx, ny, nz`  (**outward unit**, ‖n‖=1) |
 | `velocity_wall`  | `(N_w, 3)` | `uw, vw, ww`  (FSI structural interface velocity) |
@@ -199,10 +240,24 @@ python scripts/make_example_ibfe_export.py --dim 3 --valve --out data/ibfe_examp
 - **`traction_wall` is the full 3D Cauchy traction** `t_i = -p n_i + Σ_j μ(∂u_i/∂x_j
   + ∂u_j/∂x_i) n_j` (symmetric stress). Export `σ·n` directly from the structural
   stress; do **not** send only the pressure part `-p n`.
-- **`forcing_fluid` is the dominant Model-B signal in 3D too** — if it is all
-  zeros the FSI backbone collapses to the kinematic baseline (validator warns).
+- **`forcing_fluid` is band-localized in 3D too** — it is the IB-kernel-spread
+  structural force, nonzero only in a ~3-cell wall band and **zero in the cavity
+  interior** (so Model B = Model A there). If it is all zeros *everywhere* the FSI
+  backbone collapses to the kinematic baseline (validator warns); if it is nonzero
+  over most of the cavity it is a *manufactured full-cavity* field, not real IB
+  forcing (validator also warns). It is evaluation-only oracle ground truth, not a
+  deliverable Model B input.
 - One bundle = **one cardiac cycle**; keep `t ∈ [0, cycle_period]`.
 - Units unchanged (SI): m, s, m/s, Pa, N/m³, kg/m³, Pa·s.
+
+> **Resolution gate before any "FSI helps" claim.** The forcing band only covers a
+> fraction of the cavity, and that fraction depends on grid spacing. At the
+> **Minimum Goal B** resolution (`dx = 1.875 mm`, 1–2 beats) the ~3-cell band
+> covers only **43–59 % of the cavity volume**, so Minimum-Goal frames are a
+> format/plumbing test, **not** a basis for scientific conclusions. Pressure- or
+> forcing-related conclusions are only admissible once the **resolution gate R**
+> (`dx = 0.94 mm`, a short converged segment, run on cloud) passes. Until gate R
+> clears, treat `dx = 1.875 mm` results as an idealized upper bound only.
 
 **Verify before training**
 

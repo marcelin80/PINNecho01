@@ -261,14 +261,17 @@ Ablation 4는 **정확 forcing**만 썼으므로 traction 0.996처럼 이상적 
 
 ## Ablation 6 — forcing 셔플 진단: 비선형·궤적-특이 정보 누출 (리뷰 후속, 5시드)
 
-**동기**: 지금까지 순환성 게이트는 전부 **선형 상관**이다. 그러나 forcing의 지배 성분
-`ρDu/Dt = ρ(∂u/∂t + u·∇u)`는 **참값 u로부터 비선형적으로 유도된 값**으로, 정답을 알아야만
-계산 가능하다. 네트워크가 이 forcing을 적분해 궤적을 복원한다면, `corr(f,u)`가 낮아도 여전히
+**동기**: 지금까지 순환성 게이트는 전부 **선형 상관**이다. 크기로는 `∇p`가 forcing의 ~94%를
+차지하지만(Check 0), 그 **관성 성분** `ρDu/Dt = ρ(∂u/∂t + u·∇u)`(‖f‖의 ~30%)는 **참값 u로부터
+비선형적으로 유도된 값**으로, 정답을 알아야만 계산 가능하다. 네트워크가 이 forcing을 적분해 궤적을 복원한다면, `corr(f,u)`가 낮아도 여전히
 순환적이다 — Ablation 5의 30% 섭동은 "참값 근처"만 흔든 것이라 이를 구분 못 한다.
 
 **진단**: 콜로케이션 forcing을 **자기 자신의 무작위 순열**로 치환한다(각 점이 *다른* 점의 forcing
 벡터를 받음). 주변 분포는 동일하되 이 궤적의 참값 u와의 대응은 완전히 파괴된다. 1창·정확 벽·
 traction 없음. `baseline`(forcing 없음) / `forcing_exact`(참 forcing) / `forcing_shuffled`(순열).
+*(여기 forcing은 manufactured full-cavity라 전체 순열이 곧 support-preserving이다. 실 IBFE
+forcing은 밴드-국소라 전체 순열이 지지를 깨므로, 실데이터에선 `forcing_control="shuffle"`의
+밴드-내부 순열(내부 0 유지) + `"band_mask"` 기하 대조를 대신 쓴다 — "결론" 5번 참조.)*
 
 | variant | vorticity corr (↑) | WSS corr (↑) | pressure corr (↑) |
 |---|---|---|---|
@@ -317,8 +320,16 @@ WSS −0.019, 둘 다 baseline 대비 1/5 승). 그리고 `forcing_exact > forci
 효과는 "일반적 물리 정칙화"가 아니라 **바로 그 궤적의 참 forcing에서만** 나온다. 상관 게이트는
 압력의 선형 누출을, 셔플 진단은 구배의 비선형 누출을 드러냈다. manufactured 설정에서는 forcing
 기반 이득(압력·구배 **모두**)이 본질적으로 궤적 정보를 담으며, **"FSI가 구배량에서 음향창을
-대체한다"는 실용적 주장은 성립하지 않는다.** 독립 추정된 실제 FSI forcing만이 "물리 사전지식 vs
-정답 주입"을 분리할 수 있다.
+대체한다"는 실용적 주장은 성립하지 않는다.** 실제 FSI forcing으로 넘어가도 이 교란이 깨끗이
+사라지지는 않는다(아래 "결론 및 권고" 5번 참조) — 실 forcing은 u에서 독립적이지 않고
+밴드-국소여서, 평가용 **오라클 실험**으로만 쓴다.
+
+> **주의 — Check 0/Ablation 6의 수치는 *manufactured full-cavity* forcing에서 나온 것이다.**
+> 여기서 쓴 forcing은 공동 전체를 채우고 참 `u`에서 유도된 합성장이라, Check 0의 `corr(f,∇p)=
+> 0.95`나 셔플 격차는 **실제 IB forcing으로 그대로 전이되지 않는다**. 실 IBFE forcing은
+> **밴드-국소**(벽 ~3셀 밴드에서만 0이 아니고 공동 내부는 정확히 0)여서 밴드 밖에선 Model
+> B = Model A이고, 전체-체적 상관/셔플 통계는 애초에 성립하지 않는다. 실 forcing의 진단은
+> **support-preserving 셔플**(밴드 내부만 섞고 내부 0 유지) + **band-mask** 대조로 다시 설계한다.
 
 ---
 
@@ -336,7 +347,7 @@ WSS −0.019, 둘 다 baseline 대비 1/5 승). 그리고 `forcing_exact > forci
    방향은 일관(5/5, 부호검정 p=0.031)이나 t-test로 크기까지 확정하기엔 검정력 부족 — 즉 죽은 게
    아니라 "미확정"이다. 다만 그 남은 vorticity 효과조차 셔플로 사라지므로 궤적-특이 누출이다.
    → **manufactured 설정에서는 forcing 기반 이득(압력·구배 모두)이 본질적으로 궤적 정보를
-   담으며**, 이를 벗어나려면 독립 추정된 실제 FSI forcing이 필요하다.
+   담는다.** 실 FSI forcing으로 넘어가도 깨끗이 분리되진 않으므로(5번 참조) 오라클로만 쓴다.
 3. **순환성과 완전히 독립적으로 남는 유일한 견고한 결과는 관측성(다중 음향창) 논점**이다
    (Ablation 3 + 초기 §4.2). 이것을 별도 방법론 결과로 먼저 정리하는 것이 안전하다. 단, 다중창이
    속도(`u`)는 개선하나 WSS는 오히려 낮출 수 있다는 뉘앙스(Ablation 6)도 함께 보고한다.
@@ -348,12 +359,19 @@ WSS −0.019, 둘 다 baseline 대비 1/5 승). 그리고 `forcing_exact > forci
    한 궤적 정보 누출은 manufactured 구조의 본질적 특성이라 같은 벽에 부딪힐 공산이 크다. 따라서
    재설계에 착수하더라도 검증은 상관 게이트(`--which coupling`: `corr(f,∇p)` **와**
    `corr(f, μ∇×ω)`)**와 셔플 게이트**(`--which forcing-shuffle`)를 **모두** 통과해야 한다.
-5. **유일하게 순환을 원천 제거하는 길 = 실제로 푼 FSI 지상진값.** 실 IBFE forcing은 u에서
-   역산한 게 아니라 구조 솔버가 독립 추정한 값이므로, 실데이터에서 셔플 진단
-   (`train_ibfe(..., shuffle_forcing=True)`)을 재실행해 exact−shuffled 격차가 유지되면 그때
-   "물리 사전지식의 순수 효과"를 주장할 수 있다. **선행 관문은 cardiac4d-pipeline의 AMR 3레벨
-   실런 검증 → 심박 1주기 IBFE export → `load_ibfe_output` 투입.** *IBAMR 실행 환경(접근/컴퓨팅)
-   미확보 상태이므로 이 관문이 뚫리기 전까지 압력 관련 결론은 이상적 상한으로만 해석한다.*
+5. **실제로 푼 FSI 지상진값은 "순환 제거"가 아니라 오라클 상한이다.** 실 IBFE forcing은
+   구조 솔버가 푼 값이지만 u에서 **독립적이지 않다** — (i) 구조가 보간된 유체속도를 따라
+   움직이고(`dX/dt = u(X)`), (ii) `f`가 밴드 운동량 균형을 구성상 폐합하며(그 밴드에서 참
+   `(u,p)` 기준 NS 잔차≈0), (iii) 커널 지지가 순간 벽 위치를 표시한다. 게다가 **밴드-국소**라
+   공동 내부에선 0이어서 밴드 밖 Model B = Model A다. 따라서 실 forcing 실험은 **오라클**
+   (forcing을 알았다면의 상한, 평가 전용·전달물 Model B 입력 아님)로 돌리고, **support-
+   preserving 셔플**(`forcing_control="shuffle"`, 밴드 내부만 섞음)과 **band-mask 대조**
+   (`forcing_control="band_mask"`, 크기×내향 법선) **두 대조를 모두** 이기고 남는 몫만 "순수
+   물리 효과"의 상한으로 해석한다. **선행 관문은 해상도 게이트 R(`dx = 0.94 mm`, 짧은 수렴
+   세그먼트, 클라우드; 아직 미실행)** — "AMR 3레벨"이 아니다 — 통과 후 심박 1주기 IBFE export
+   → `load_ibfe_output` 투입. *Minimum Goal B(`dx = 1.875 mm`)는 포맷 검증용일 뿐이고(밴드가
+   공동 체적의 43–59%만 덮음) R 통과 전까지 압력 관련 결론은 이상적 상한으로만 해석한다.
+   IBAMR 실행 환경(접근/컴퓨팅) 미확보.*
 6. **baseline 노이즈 레벨(8% bias / 10% noise)은 임시값**이다. `A_exact`(노이즈 0)를 공정
    기준선으로 병기했고, 실데이터 확보 시 실제 speckle-tracking reproducibility 문헌값으로
    보정해야 한다.

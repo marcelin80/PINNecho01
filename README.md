@@ -334,7 +334,8 @@ findings into one robust result and one retracted claim:
   shuffled forcing *hurts* vs. baseline and `forcing_exact > forcing_shuffled`
   (5 seeds), so it carries **trajectory-specific information** — a nonlinear leak
   the correlation gates (`corr(f,∇p)`, `corr(f,μ∇×ω)≈0`) could not see, because the
-  dominant term `ρDu/Dt` is a nonlinear function of the true `u`. Reporting t-test
+  *inertial component* `ρDu/Dt` (≈30% of `‖f‖`; ∇p is the dominant ~94%) is a
+  nonlinear function of the true `u`. Reporting t-test
   **and** an exact sign test keeps the two gradient quantities distinct: on a *fair
   same-window* baseline **WSS is null** (Δ +0.013, t = 0.70, 2/5, sign p = 0.81 —
   the earlier apparent WSS win was a confound: the 2-window baseline is itself
@@ -342,9 +343,13 @@ findings into one robust result and one retracted claim:
   p = 0.031) though underpowered for the t-test to confirm magnitude — not dead,
   but *undetermined*. **Either way, in this manufactured setup forcing-based gains
   (pressure *and* gradients) all carry an irreducible trajectory-information
-  component; only an independently-estimated real FSI forcing can separate
-  "physics prior" from "answer injection."** See [`docs/ABLATIONS.md`](docs/ABLATIONS.md)
-  Ablation 6.
+  component.** The planned real-forcing rerun is **not** a clean separator either:
+  real IBFE forcing is band-localized (zero in the cavity interior ⇒ Model B = A
+  there) and still carries trajectory information (the structure moves with `u`,
+  `f` closes the band momentum balance, and its support marks the wall), so it is
+  run as an **oracle** experiment (forcing is evaluation-only, never a deliverable
+  Model B input) with two controls — a *support-preserving* shuffle and a geometric
+  *band-mask* control. See [`docs/ABLATIONS.md`](docs/ABLATIONS.md) Ablation 6.
 
 Raw numbers: [`docs/results/compare_ab_forcing.json`](docs/results/compare_ab_forcing.json),
 [`docs/results/compare_ab_traction.json`](docs/results/compare_ab_traction.json),

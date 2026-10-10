@@ -44,6 +44,30 @@ print(metrics)
 PY
 ```
 
+### Schema-test (`active_twitch`) fixture
+
+Before a physiological export exists, you can exercise the whole loader →
+validator → trainer path against a *format-only* stand-in that mimics the agreed
+first file: 3D, **band-localized forcing**, **open base (no valves)**, **traction
+on hold (zeros)**, a short **0.33 s partial segment**. It is **not physically
+meaningful** — use it only to confirm the contract is drop-in.
+
+```bash
+# Emit a concrete active_twitch-shaped example (NPZ + manifest/CSV) and validate it:
+python scripts/make_example_ibfe_export.py --active-twitch --out data/ibfe_active_twitch
+```
+
+```python
+from pinnecho.data import synthetic_active_twitch_frames, validate_ibfe_frames, train_ibfe
+frames = synthetic_active_twitch_frames()          # band-localized, open base, 0.33 s
+print(validate_ibfe_frames(frames).summary())      # expect OK, band fraction < 0.7
+# Train with traction OFF (matches the on-hold contract):
+model, metrics = train_ibfe(frames, backbone="fsi_informed", use_traction=False)
+```
+
+When the real `active_twitch` NPZ/manifest arrives, diff it against this fixture's
+keys/columns; if it validates, `load_ibfe_output` is drop-in.
+
 ## Units and conventions
 
 - **SI throughout**: metres, seconds, m/s, Pa, N/m³, kg/m³, Pa·s.

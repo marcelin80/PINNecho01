@@ -7,6 +7,7 @@ from .load_ibfe_output import (
     load_ibfe_output,
     synthetic_ibfe_frames,
     synthetic_ibfe_frames_3d,
+    synthetic_active_twitch_frames,
 )
 from .ibfe_io import (
     save_ibfe_npz,
@@ -52,6 +53,7 @@ __all__ = [
     "load_ibfe_output",
     "synthetic_ibfe_frames",
     "synthetic_ibfe_frames_3d",
+    "synthetic_active_twitch_frames",
     "save_ibfe_npz",
     "load_ibfe_npz",
     "load_ibfe_manifest",

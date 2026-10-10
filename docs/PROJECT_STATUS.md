@@ -1,7 +1,7 @@
 # PINNecho 프로젝트 작업 상태
 
 > 최종 업데이트: 2026-09-20 · 브랜치 `cursor/fsi-pinn-doppler-stage1-935e` · PR #1
-> 테스트: **108 passing** (`pytest`)
+> 테스트: **115 passing** (`pytest`)
 
 FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플러 측정에서 좌심실 내부
 유동장(속도·압력·와도·잔류시간)을 복원하고, 두 물리 백본을 비교하는 프로젝트의
@@ -204,7 +204,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 
 ---
 
-## 6. 테스트 현황 (108 passing)
+## 6. 테스트 현황 (115 passing)
 
 | 파일 | 검증 대상 |
 |---|---|
@@ -222,6 +222,7 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 | `test_ablation_smoke.py` | 물리항 격리·traction 섭동 대조 실험 배관 |
 | `test_forcing_oracle.py` | 밴드-국소 forcing·support-preserving 셔플·band-mask 대조·검증기 밴드율 |
 | `test_band_oracle_smoke.py` | 밴드-국소 합성 forcing 옵션·커버리지 리포터·A/exact/shuffle/band_mask 스윕 |
+| `test_active_twitch_schema.py` | active_twitch 스키마-테스트 fixture(밴드-국소·개방기저·traction 0·0.33s)·왕복·학습 |
 | `test_config.py` / `test_pipeline_smoke.py` | 설정 왕복·엔드투엔드 스모크 |
 
 CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.

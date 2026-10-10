@@ -147,6 +147,30 @@ def apply_forcing_control(forcing: torch.Tensor, coords: torch.Tensor,
     raise ValueError(f"unknown forcing_control '{mode}' (expected None/'shuffle'/'band_mask')")
 
 
+def geometric_band_template(coords: torch.Tensor, dim: int,
+                            band_frac: float = 0.35):
+    """Geometric wall-band template for the deliverable Model B forcing ansatz.
+
+    Returns ``(direction, weight)`` where ``direction`` ``(N, dim)`` is the inward
+    unit vector toward the cavity centroid and ``weight`` ``(N, 1)`` ramps from 0 in
+    the interior to 1 at the wall (over the outer ``band_frac`` of the normalised
+    radius). Both are derived purely from the fluid point-cloud geometry (centroid +
+    radial extent), i.e. from information available in wall kinematics -- **not** from
+    the true forcing -- so feeding this template to :class:`ActivationForcing` leaks
+    no trajectory information.
+    """
+    c = coords[:, :dim]
+    centroid = c.mean(dim=0, keepdim=True)
+    d = c - centroid
+    r = d.norm(dim=1, keepdim=True)
+    rmax = torch.quantile(r, 0.98).clamp_min(1e-9)
+    rn = r / rmax
+    inward = -d / r.clamp_min(1e-12)
+    bf = max(float(band_frac), 1e-6)
+    weight = ((rn - (1.0 - bf)) / bf).clamp(0.0, 1.0)
+    return inward, weight
+
+
 def _beam_dirs(X: torch.Tensor, transducer, dim: int) -> torch.Tensor:
     tr = torch.tensor(transducer, dtype=X.dtype, device=X.device).reshape(1, dim)
     d = X[:, :dim] - tr
@@ -182,6 +206,8 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             predict_scalar: bool = False,
                             shuffle_forcing: bool = False,
                             forcing_control: Optional[str] = None,
+                            param_forcing: bool = False,
+                            band_frac: float = 0.35,
                             planes: Optional[Sequence] = None):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
@@ -230,6 +256,11 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
 
     has_valve = frames.coords_mitral.shape[0] > 0
 
+    tmpl_dir = tmpl_w = None
+    if param_forcing:
+        tmpl_dir, tmpl_w = geometric_band_template(
+            frames.coords_fluid, dim, band_frac=band_frac)
+
     def _idx(n_total, n):
         if n_total == 0:
             return torch.zeros(0, dtype=torch.long)
@@ -249,6 +280,9 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
             "wall": {"X": frames.coords_wall[wi].clone(),
                      "u_wall": frames.velocity_wall[wi]},
         }
+        if param_forcing:
+            batches["collocation"]["forcing_template_dir"] = tmpl_dir[ci]
+            batches["collocation"]["forcing_template_w"] = tmpl_w[ci]
         if use_traction:
             batches["traction"] = {
                 "X": frames.coords_wall[wi].clone(),
@@ -267,8 +301,19 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
 
 def build_model_for_ibfe(frames, backbone: str = "fsi_informed",
                          predict_scalar: bool = False, use_traction: bool = False,
-                         init_seed: int = 0, model_overrides: Optional[dict] = None):
-    """Build the shared :class:`PINNNet` + a backbone-appropriate loss for ``frames``."""
+                         init_seed: int = 0, model_overrides: Optional[dict] = None,
+                         n_harmonics: int = 2):
+    """Build the shared :class:`PINNNet` + a backbone-appropriate loss for ``frames``.
+
+    ``backbone`` is one of:
+
+    * ``"baseline"``     -- Model A (kinematic wall, no forcing);
+    * ``"fsi_informed"`` -- the **oracle** Model B (handed the true IB forcing);
+    * ``"fsi_param"``    -- the **deliverable** Model B: accurate FSI wall velocity +
+      a low-dim :class:`~pinnecho.models.activation_forcing.ActivationForcing`
+      ansatz (``T_max`` + timing ``g(t)``) with a geometric band template; it never
+      sees the true forcing.
+    """
     from .ibfe_io import frames_to_dtype
     frames = frames_to_dtype(frames, torch.get_default_dtype())
     dim = frames.spatial_dim
@@ -284,14 +329,23 @@ def build_model_for_ibfe(frames, backbone: str = "fsi_informed",
 
     cont_scale = s["length"] / max(s["velocity"], 1e-30)
     mom_scale = s["length"] / max(frames.rho * s["velocity"] ** 2, 1e-30)
-    is_fsi = backbone == "fsi_informed"
+    is_oracle = backbone == "fsi_informed"
+    is_param = backbone == "fsi_param"
+    is_fsi = is_oracle or is_param
+    if is_param:
+        from ..models.activation_forcing import ActivationForcing
+        # Initialise T_max at a physical body-force-density scale rho U^2 / L.
+        init_amp = frames.rho * s["velocity"] ** 2 / max(s["length"], 1e-9)
+        model.activation_forcing = ActivationForcing(
+            period=frames.cycle_period, n_harmonics=n_harmonics, init_amp=init_amp)
+    forcing_mode = "fsi" if is_oracle else ("param" if is_param else None)
     weights = LossWeights(data=10.0, pde=1.0, scalar=1.0 if predict_scalar else 0.0,
                           bc=10.0, ic=0.0, periodic=0.0,
                           traction=5.0 if use_traction else 0.0)
     loss_fn = CompositeLoss(
         rho=frames.rho, mu=frames.mu, weights=weights,
         anneal=AnnealSchedule(enabled=True, pde_warmup_frac=0.3),
-        forcing="fsi" if is_fsi else None,
+        forcing=forcing_mode,
         wall_mode="fsi" if is_fsi else "kinematic",
         use_traction=use_traction,
         continuity_scale=cont_scale, momentum_scale=mom_scale,
@@ -346,24 +400,30 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                transducers: Optional[Sequence] = None, noise_level: float = 0.05,
                model_overrides: Optional[dict] = None, verbose: bool = True,
                shuffle_forcing: bool = False, forcing_control: Optional[str] = None,
+               band_frac: float = 0.35, n_harmonics: int = 2,
                planes: Optional[Sequence] = None):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
-    ``shuffle_forcing=True`` / ``forcing_control`` run the **oracle** forcing
-    diagnostic (support-preserving shuffle or geometric band-mask control; see
-    :func:`make_ibfe_batch_builder` / :func:`apply_forcing_control`). Pass
+    ``backbone="fsi_param"`` trains the **deliverable** Model B (accurate FSI wall
+    velocity + a low-dim activation-forcing ansatz, never the true ``f``); ``band_frac``
+    sets the geometric band template width and ``n_harmonics`` the timing ``g(t)``
+    resolution. ``shuffle_forcing=True`` / ``forcing_control`` run the **oracle**
+    forcing diagnostic (support-preserving shuffle or geometric band-mask control;
+    see :func:`make_ibfe_batch_builder` / :func:`apply_forcing_control`). Pass
     ``planes`` (from :func:`~pinnecho.data.acquisition.standard_views_from_frames`)
     to use the realistic multi-plane echo acquisition geometry instead of
     whole-volume point windows.
     """
     model, loss_fn = build_model_for_ibfe(
         frames, backbone=backbone, predict_scalar=predict_scalar,
-        use_traction=use_traction, init_seed=seed, model_overrides=model_overrides)
+        use_traction=use_traction, init_seed=seed, model_overrides=model_overrides,
+        n_harmonics=n_harmonics)
     loss_fn.anneal.total_steps = steps
     build_batches = make_ibfe_batch_builder(
         frames, transducers=transducers, noise_level=noise_level, seed=seed,
         use_traction=use_traction, predict_scalar=predict_scalar,
         shuffle_forcing=shuffle_forcing, forcing_control=forcing_control,
+        param_forcing=(backbone == "fsi_param"), band_frac=band_frac,
         planes=planes)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)

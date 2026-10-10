@@ -204,6 +204,27 @@ def _subsample(frames: IBFEFrames, max_points: int) -> IBFEFrames:
     return dataclasses.replace(frames, **updates)
 
 
+def _band_localize_forcing(lv, coords_fluid: torch.Tensor,
+                           forcing_fluid: torch.Tensor,
+                           band_frac: float) -> torch.Tensor:
+    """Zero the manufactured forcing outside a wall band (emulate IB kernel support).
+
+    Real IB forcing is the structural Lagrangian force spread to the Euler grid by
+    a compact kernel, so it is nonzero only in a thin shell at the wall and exactly
+    zero in the cavity interior. The manufactured generators instead emit a
+    *full-cavity* field; this restricts that field to the outer shell
+    ``rho >= 1 - band_frac`` (``rho`` the moving-frame normalised radius, ``rho = 1``
+    on the wall) and zeros the interior, so a band-localized *oracle* dry-run can be
+    run on synthetic data before real export is available. ``band_frac`` is the band
+    thickness in normalised radius (not a volume fraction); the realized cavity-
+    volume coverage depends on geometry and is reported separately.
+    """
+    rho2 = lv._normalised(coords_fluid)[-1]  # (N, 1): rho^2, =1 at wall, 0 at centre
+    inner = (1.0 - float(band_frac)) ** 2
+    band = (rho2 >= inner).to(forcing_fluid.dtype)
+    return forcing_fluid * band
+
+
 def synthetic_ibfe_frames(
     config,
     n_fluid: int = 4000,
@@ -212,6 +233,7 @@ def synthetic_ibfe_frames(
     seed: int = 0,
     with_valve: bool = False,
     mitral_fraction: float = 0.35,
+    forcing_band_frac: Optional[float] = None,
     dtype: torch.dtype = torch.float64,
 ) -> IBFEFrames:
     """Produce a 2D :class:`IBFEFrames` bundle from the synthetic-LV stand-in.
@@ -228,6 +250,12 @@ def synthetic_ibfe_frames(
     ``c = 0`` inflow reinitialisation can be developed/tested before real valve
     data is available. The closed area-preserving synthetic cavity has no true
     net inflow, so this is a plumbing placeholder, not a physical mitral jet.
+
+    ``forcing_band_frac`` (if set, e.g. ``0.25``) restricts the manufactured forcing
+    to a wall band of that normalised-radius thickness and zeros the cavity
+    interior, emulating the band-localized support of real IB forcing (see
+    :func:`_band_localize_forcing`). Use it for the band-localized *oracle* dry-run;
+    leave it ``None`` for the original full-cavity Stage-1 ablations.
     """
     import numpy as np
 
@@ -244,6 +272,9 @@ def synthetic_ibfe_frames(
     velocity_fluid = torch.cat([fields["u"], fields["v"]], dim=1)
     pressure_fluid = fields["p"]
     forcing_fluid = fields["forcing"]
+    if forcing_band_frac is not None:
+        forcing_fluid = _band_localize_forcing(
+            lv, coords_fluid, forcing_fluid, forcing_band_frac)
 
     # Interface (endocardial wall).
     wall = lv.sample_wall(n_wall, t_values, rng)
@@ -300,6 +331,7 @@ def synthetic_ibfe_frames_3d(
     seed: int = 0,
     with_valve: bool = False,
     mitral_fraction: float = 0.35,
+    forcing_band_frac: Optional[float] = None,
     dtype: torch.dtype = torch.float64,
 ) -> IBFEFrames:
     """Produce a 3D :class:`IBFEFrames` bundle from the volume-preserving
@@ -308,7 +340,9 @@ def synthetic_ibfe_frames_3d(
     Fields, wall velocity, wall traction (``sigma . n`` from the exact ``(u, p)``)
     and body forcing all come from the NS-exact 3D synthetic field, so the real
     3D ``load_ibfe_output`` path can be developed against the identical interface.
-    ``with_valve`` behaves as in :func:`synthetic_ibfe_frames`.
+    ``with_valve`` behaves as in :func:`synthetic_ibfe_frames`. ``forcing_band_frac``
+    band-localizes the forcing (zeros the cavity interior) for the oracle dry-run,
+    exactly as in :func:`synthetic_ibfe_frames`.
     """
     import numpy as np
 
@@ -324,6 +358,9 @@ def synthetic_ibfe_frames_3d(
     velocity_fluid = torch.cat([fields["u"], fields["v"], fields["w"]], dim=1)
     pressure_fluid = fields["p"]
     forcing_fluid = fields["forcing"]
+    if forcing_band_frac is not None:
+        forcing_fluid = _band_localize_forcing(
+            lv, coords_fluid, forcing_fluid, forcing_band_frac)
 
     wall = lv.sample_wall(n_wall, t_values, rng)
     coords_wall = wall["X"].to(dtype)

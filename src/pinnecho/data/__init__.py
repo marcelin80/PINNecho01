@@ -25,6 +25,8 @@ from .ibfe_dataset import (
     scales_from_frames,
     default_windows_from_frames,
     build_doppler_from_frames,
+    forcing_band_mask,
+    apply_forcing_control,
 )
 from .synthesize_doppler import DopplerMeasurements, synthesize_doppler
 from .acquisition import (
@@ -64,6 +66,8 @@ __all__ = [
     "scales_from_frames",
     "default_windows_from_frames",
     "build_doppler_from_frames",
+    "forcing_band_mask",
+    "apply_forcing_control",
     "DopplerMeasurements",
     "synthesize_doppler",
     "ImagingPlane",

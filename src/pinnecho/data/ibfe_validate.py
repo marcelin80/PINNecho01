@@ -132,12 +132,26 @@ def validate_ibfe_frames(frames, strict: bool = False,
         stats["pressure_min"] = float(frames.pressure_fluid.min())
         stats["pressure_max"] = float(frames.pressure_fluid.max())
         stats["forcing_absmax"] = float(frames.forcing_fluid.abs().max())
+        # Real IBFE forcing is the structural Lagrangian force spread to the Euler
+        # grid by the IB kernel, so it is *band-localized* (nonzero only in a
+        # ~3-cell shell around the wall) and exactly zero in the cavity interior;
+        # outside the band Model B reduces to Model A. Report the band-coverage
+        # fraction so a too-coarse grid (large band / small cavity) is visible,
+        # and only flag an all-zero field as degenerate.
+        fmag = frames.forcing_fluid.norm(dim=1)
+        stats["forcing_band_fraction"] = float((fmag > 0).float().mean())
         if stats["speed_max"] > max_speed:
             warnings.append(
                 f"peak speed {stats['speed_max']:.2f} m/s exceeds {max_speed} m/s "
                 "-- check units (expected SI m/s)")
         if stats["forcing_absmax"] == 0.0:
             warnings.append("forcing_fluid is all zeros -- Model B reduces to Model A")
+        elif stats["forcing_band_fraction"] > 0.7:
+            warnings.append(
+                f"forcing is nonzero over {stats['forcing_band_fraction']:.0%} of fluid "
+                "points -- real IB forcing is band-localized (a few % near the wall); "
+                "a high fraction means a coarse grid (large band vs. cavity) or a "
+                "manufactured full-cavity field, so FSI-vs-baseline claims are not safe")
 
     if frames.rho <= 0 or frames.mu <= 0:
         errors.append(f"non-physical rho={frames.rho} / mu={frames.mu}")

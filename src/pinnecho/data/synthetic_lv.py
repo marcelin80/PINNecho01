@@ -150,7 +150,14 @@ class SyntheticLVFSI:
         return ops.curl_z(uv[:, 0:1], uv[:, 1:2], X)
 
     def forcing(self, X: torch.Tensor) -> torch.Tensor:
-        """FSI body forcing ``f = rho Du/Dt + grad p - mu lap u`` (``(N, 2)``)."""
+        """Manufactured *full-cavity* body forcing ``f = rho Du/Dt + grad p - mu
+        lap u`` (``(N, 2)``).
+
+        This is a self-consistent manufactured field defined over the *whole*
+        cavity, used by the Stage-1 ablations. It is **not** the real IB forcing,
+        which is band-localized (nonzero only in a ~3-cell wall shell, zero in the
+        interior); see ``load_ibfe_output`` for that contract.
+        """
         uv = self._velocity_from_graph(X)
         p = self.pressure(X)
         fx, fy = momentum_residual(

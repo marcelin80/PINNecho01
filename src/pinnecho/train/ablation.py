@@ -558,6 +558,13 @@ def run_forcing_shuffle(config, *, seeds: Sequence[int] = (0, 1, 2, 3, 4),
     carrying trajectory-specific information -- a nonlinear leak the correlation
     gates missed. ``w2_baseline`` is included for the paired WSS/vorticity check.
 
+    NOTE: this operates on the **manufactured full-cavity** forcing, whose support
+    is the whole cavity, so a full row permutation is trivially support-preserving.
+    The *real* IBFE forcing is band-localized (zero interior), so the real-data
+    rerun uses the support-preserving shuffle + geometric band-mask control in
+    :func:`pinnecho.data.ibfe_dataset.apply_forcing_control`, and is an **oracle**
+    experiment (forcing is not a deliverable Model B input). See ``docs/ABLATIONS.md``.
+
     Returns ``{"variants": {..}, "paired": {..}, "raw": {..}}``.
     """
     cfg1 = _apply_windows(config, 1)

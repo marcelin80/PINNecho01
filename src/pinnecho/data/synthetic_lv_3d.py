@@ -166,7 +166,13 @@ class SyntheticLV3D:
         return torch.cat([wx, wy, wz], dim=1)
 
     def forcing(self, X: torch.Tensor) -> torch.Tensor:
-        """FSI body forcing ``f = rho Du/Dt + grad p - mu lap u`` (``(N, 3)``)."""
+        """Manufactured *full-cavity* body forcing ``f = rho Du/Dt + grad p - mu
+        lap u`` (``(N, 3)``).
+
+        Self-consistent manufactured field over the whole cavity (Stage-1
+        ablations) -- distinct from the real band-localized IB forcing (nonzero
+        only in a wall shell); see ``load_ibfe_output``.
+        """
         uvw = self._velocity_from_graph(X)
         vel = [uvw[:, i:i + 1] for i in range(3)]
         p = self.pressure(X)

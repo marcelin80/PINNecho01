@@ -19,8 +19,16 @@ Fluid volume (ground-truth interior field, held out from training as GT):
     velocity_fluid : (N_f, 2)   columns (u, v)             [m/s]
     pressure_fluid : (N_f, 1)                              [Pa]
     forcing_fluid  : (N_f, 2)   columns (f_x, f_y)         [N/m^3]
-        Net body force the structure exerts on the fluid (active contraction +
-        elastic coupling) -- this is the term that separates Model B from A.
+        The structural Lagrangian force spread to the Euler grid by the IB kernel.
+        In the IB momentum equation ``rho Du/Dt = -grad p + mu lap u + f`` it is
+        the ``f`` term, so ``f = rho Du/Dt + grad p - mu lap u`` *inside its
+        support* -- but that support is only a ~3-cell band around the wall; ``f``
+        is exactly 0 in the cavity interior, where Model B therefore equals Model
+        A. It is **evaluation-only ground truth (an oracle)**, NOT a deliverable
+        Model B input (unavailable from clinical echo); the deliverable Model B
+        inputs are wall kinematics + low-dim activation parameters. (The synthetic
+        stand-in generators instead emit a *full-cavity* manufactured forcing; see
+        their docstrings -- do not conflate the two.)
 
 Fluid-structure interface (endocardial wall):
     coords_wall    : (N_w, 3)   columns (x, y, t)          [m, m, s]

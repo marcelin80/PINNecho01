@@ -78,6 +78,63 @@ def default_windows_from_frames(frames, n_windows: int = 2) -> List[Tuple[float,
     return [apical, lat_x, lat_y][:max(1, n_windows)]
 
 
+def forcing_band_mask(forcing: torch.Tensor, tol: float = 0.0) -> torch.Tensor:
+    """Boolean mask of points inside the forcing support (the IB wall band).
+
+    Real IBFE forcing is the structural Lagrangian force spread to the Euler grid
+    by the IB kernel, so it is nonzero only in a ~3-cell shell around the wall and
+    exactly zero in the cavity interior. This returns ``‖f‖ > tol`` per point.
+    """
+    return forcing.norm(dim=1) > tol
+
+
+def apply_forcing_control(forcing: torch.Tensor, coords: torch.Tensor,
+                          mode: Optional[str], seed: int, dim: int) -> torch.Tensor:
+    """Diagnostic forcing field for the **oracle** forcing experiment (see below).
+
+    The forcing ``f`` is evaluation-only ground truth, never a deliverable Model B
+    input (it is unavailable from clinical echo); feeding it to training is an
+    *oracle upper bound*. Because even real IBFE ``f`` is not independent of the
+    trajectory -- the structure moves with the interpolated fluid velocity
+    (``dX/dt = u``), ``f`` closes the band momentum balance by construction, and
+    its very support marks the instantaneous wall position -- the shuffle must not
+    assume zero circularity. Modes:
+
+    * ``None``        -- ``f`` unchanged (the oracle itself).
+    * ``"shuffle"``   -- **support-preserving** temporal shuffle: permute the
+      forcing vectors *within the band only* (interior zeros stay zero), so the
+      support is preserved while the per-point trajectory correspondence is
+      destroyed.
+    * ``"band_mask"`` -- replace band forcing with a purely **geometric**
+      placeholder (mean band magnitude x inward unit vector toward the cavity
+      centroid), zero outside the band: it carries only *where the wall is*, no
+      trajectory-specific force. The contrast ``shuffle`` vs ``band_mask`` vs the
+      exact oracle separates a physics benefit from mere wall-position marking.
+    """
+    if mode is None:
+        return forcing
+    band = forcing_band_mask(forcing)
+    nb = int(band.sum())
+    if nb == 0:
+        return forcing
+    if mode == "shuffle":
+        gp = torch.Generator().manual_seed(seed + 991)
+        idx = torch.nonzero(band, as_tuple=False).squeeze(1)
+        perm = idx[torch.randperm(nb, generator=gp)]
+        out = forcing.clone()
+        out[idx] = forcing[perm]
+        return out
+    if mode == "band_mask":
+        out = torch.zeros_like(forcing)
+        centroid = coords[:, :dim].mean(dim=0, keepdim=True)
+        d = centroid - coords[:, :dim]
+        d = d / d.norm(dim=1, keepdim=True).clamp_min(1e-12)
+        mag = float(forcing[band].norm(dim=1).mean())
+        out[band] = mag * d[band]
+        return out
+    raise ValueError(f"unknown forcing_control '{mode}' (expected None/'shuffle'/'band_mask')")
+
+
 def _beam_dirs(X: torch.Tensor, transducer, dim: int) -> torch.Tensor:
     tr = torch.tensor(transducer, dtype=X.dtype, device=X.device).reshape(1, dim)
     d = X[:, :dim] - tr
@@ -112,16 +169,25 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             use_traction: bool = False,
                             predict_scalar: bool = False,
                             shuffle_forcing: bool = False,
+                            forcing_control: Optional[str] = None,
                             planes: Optional[Sequence] = None):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
-    ``shuffle_forcing`` enables the **forcing-shuffle diagnostic** (see
-    ``pinnecho.train.ablation.run_forcing_shuffle`` and ``docs/ABLATIONS.md``
-    Ablation 6) on *real* IBFE forcing: the fluid forcing rows are randomly
-    permuted (same marginal distribution, trajectory correspondence destroyed).
-    Run A/B with this on and off; if the exact-vs-shuffled gap seen on synthetic
-    data collapses for real (independently-estimated) FSI forcing, the physics
-    benefit is genuine rather than trajectory injection.
+    **Forcing is evaluation-only ground truth (an oracle), not a deliverable
+    Model B input** -- it cannot be measured from clinical echo. Feeding it to
+    training is an upper-bound experiment. ``shuffle_forcing`` / ``forcing_control``
+    run the oracle forcing diagnostic via :func:`apply_forcing_control`:
+
+    * ``shuffle_forcing=True`` (== ``forcing_control="shuffle"``) -- a
+      **support-preserving** temporal shuffle (permute forcing *within the IB wall
+      band*, interior zeros kept zero);
+    * ``forcing_control="band_mask"`` -- a geometric wall-position placeholder.
+
+    Real IBFE forcing is band-localized and not trajectory-independent (structure
+    moves with ``u``; ``f`` closes the band momentum balance; its support marks the
+    wall), so the exact / shuffle / band-mask contrast is what separates a physics
+    benefit from wall-position marking -- do not assume zero circularity. Outside
+    the band ``f = 0``, so Model B equals Model A there.
 
     ``planes`` (a list of :class:`~pinnecho.data.acquisition.ImagingPlane`) selects
     the realistic multi-plane acquisition geometry: each echo view only sees the
@@ -144,10 +210,11 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     g = torch.Generator().manual_seed(seed)
 
     forcing_fluid = frames.forcing_fluid
-    if shuffle_forcing and forcing_fluid.shape[0] > 1:
-        gp = torch.Generator().manual_seed(seed + 991)
-        perm = torch.randperm(forcing_fluid.shape[0], generator=gp)
-        forcing_fluid = forcing_fluid[perm].clone()
+    mode = forcing_control if forcing_control is not None else (
+        "shuffle" if shuffle_forcing else None)
+    if mode is not None and forcing_fluid.shape[0] > 1:
+        forcing_fluid = apply_forcing_control(
+            forcing_fluid, frames.coords_fluid, mode, seed, dim)
 
     has_valve = frames.coords_mitral.shape[0] > 0
 
@@ -266,14 +333,16 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                predict_scalar: bool = False, use_traction: bool = False,
                transducers: Optional[Sequence] = None, noise_level: float = 0.05,
                model_overrides: Optional[dict] = None, verbose: bool = True,
-               shuffle_forcing: bool = False, planes: Optional[Sequence] = None):
+               shuffle_forcing: bool = False, forcing_control: Optional[str] = None,
+               planes: Optional[Sequence] = None):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
-    Set ``shuffle_forcing=True`` to run the Ablation-6 forcing-shuffle diagnostic
-    on real IBFE forcing (see ``make_ibfe_batch_builder``). Pass ``planes`` (from
-    :func:`~pinnecho.data.acquisition.standard_views_from_frames`) to use the
-    realistic multi-plane echo acquisition geometry instead of whole-volume point
-    windows.
+    ``shuffle_forcing=True`` / ``forcing_control`` run the **oracle** forcing
+    diagnostic (support-preserving shuffle or geometric band-mask control; see
+    :func:`make_ibfe_batch_builder` / :func:`apply_forcing_control`). Pass
+    ``planes`` (from :func:`~pinnecho.data.acquisition.standard_views_from_frames`)
+    to use the realistic multi-plane echo acquisition geometry instead of
+    whole-volume point windows.
     """
     model, loss_fn = build_model_for_ibfe(
         frames, backbone=backbone, predict_scalar=predict_scalar,
@@ -282,7 +351,8 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
     build_batches = make_ibfe_batch_builder(
         frames, transducers=transducers, noise_level=noise_level, seed=seed,
         use_traction=use_traction, predict_scalar=predict_scalar,
-        shuffle_forcing=shuffle_forcing, planes=planes)
+        shuffle_forcing=shuffle_forcing, forcing_control=forcing_control,
+        planes=planes)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

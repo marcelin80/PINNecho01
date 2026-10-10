@@ -9,7 +9,7 @@ readable while remaining explicit about every knob that exists.
 import dataclasses
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -112,13 +112,34 @@ class ModelConfig:
 
 
 @dataclass
+class WallTrackingConfig:
+    """Contour-tracking error applied to Model A's kinematic wall velocity.
+
+    Named presets (see :mod:`pinnecho.data.tracking_noise`):
+
+    * ``exact``       -- no error (``A_exact`` / coincident-wall isolation)
+    * ``placeholder`` -- legacy Stage-1 pair (-8% bias, 10% RMS); **default**
+      so published Ablation 1–6 numbers stay reproducible
+    * ``ste``         -- speckle-tracking literature (Houard 2021 test-retest
+      CV 8.9%; Farsalinos 2015 inter-observer 5.4–8.6%; -5% FD under-estimation)
+
+    ``bias`` / ``noise`` override the preset when not ``None``.
+    """
+
+    preset: str = "placeholder"
+    bias: Optional[float] = None
+    noise: Optional[float] = None
+
+
+@dataclass
 class PhysicsConfig:
     """Which physics backbone to use.
 
     ``backbone`` is either ``"baseline"`` (kinematic no-slip only, forcing
-    assumed zero) or ``"fsi_informed"`` (adds the FSI body-forcing term to the
-    momentum residual). ``forcing_scale`` lets you sweep how strongly the FSI
-    forcing is trusted (1.0 = full FSI forcing, 0.0 collapses to baseline).
+    assumed zero), ``"fsi_informed"`` (oracle FSI body-forcing), or
+    ``"fsi_param"`` (deliverable Model B: wall kinematics + low-dim activation
+    ansatz, never the true ``f``). ``forcing_scale`` lets you sweep how strongly
+    the FSI forcing is trusted (1.0 = full FSI forcing, 0.0 collapses to baseline).
     """
 
     backbone: str = "baseline"
@@ -176,6 +197,7 @@ class Config:
     collocation: CollocationConfig = field(default_factory=CollocationConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     physics: PhysicsConfig = field(default_factory=PhysicsConfig)
+    wall_tracking: WallTrackingConfig = field(default_factory=WallTrackingConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
 
     # ------------------------------------------------------------------ #

@@ -208,7 +208,8 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             forcing_control: Optional[str] = None,
                             param_forcing: bool = False,
                             band_frac: float = 0.35,
-                            planes: Optional[Sequence] = None):
+                            planes: Optional[Sequence] = None,
+                            tracking: Optional[str] = None):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
     **Forcing is evaluation-only ground truth (an oracle), not a deliverable
@@ -232,9 +233,22 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     fluid points inside its imaging-plane slab (apical / parasternal views). When
     given it supersedes ``transducers`` (whole-volume point windows). Build them
     with :func:`~pinnecho.data.acquisition.standard_views_from_frames`.
+
+    ``tracking`` (a :mod:`~pinnecho.data.tracking_noise` preset name) optionally
+    corrupts ``velocity_wall`` into a contour-tracking estimate for Model A.
+    ``None`` / ``"exact"`` leave the FSI wall velocity untouched (the default,
+    so Ablation 7/8 coincident-wall isolation is unchanged). Pass ``"ste"`` for
+    the literature-calibrated tracking error when comparing a realistic Model A
+    against an accurate-wall Model B.
     """
     from .ibfe_io import frames_to_dtype
+    from .tracking_noise import apply_tracking_noise, resolve_tracking
     frames = frames_to_dtype(frames, torch.get_default_dtype())
+    if tracking is None or resolve_tracking(tracking).name == "exact":
+        wall_velocity = frames.velocity_wall
+    else:
+        wall_velocity = apply_tracking_noise(
+            frames.velocity_wall, tracking, seed=seed)
     dim = frames.spatial_dim
     if planes is not None:
         from .acquisition import build_multiplane_doppler_from_frames
@@ -278,7 +292,7 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
             "collocation": {"X": frames.coords_fluid[ci].clone(),
                             "forcing": forcing_fluid[ci]},
             "wall": {"X": frames.coords_wall[wi].clone(),
-                     "u_wall": frames.velocity_wall[wi]},
+                     "u_wall": wall_velocity[wi]},
         }
         if param_forcing:
             batches["collocation"]["forcing_template_dir"] = tmpl_dir[ci]
@@ -401,7 +415,8 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                model_overrides: Optional[dict] = None, verbose: bool = True,
                shuffle_forcing: bool = False, forcing_control: Optional[str] = None,
                band_frac: float = 0.35, n_harmonics: int = 2,
-               planes: Optional[Sequence] = None):
+               planes: Optional[Sequence] = None,
+               tracking: Optional[str] = None):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
     ``backbone="fsi_param"`` trains the **deliverable** Model B (accurate FSI wall
@@ -413,18 +428,26 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
     ``planes`` (from :func:`~pinnecho.data.acquisition.standard_views_from_frames`)
     to use the realistic multi-plane echo acquisition geometry instead of
     whole-volume point windows.
+
+    ``tracking`` is a wall-tracking preset (see
+    :mod:`pinnecho.data.tracking_noise`). It is applied **only** to the
+    ``baseline`` backbone (Model A), so a realistic A-vs-B comparison is
+    ``train_ibfe(..., backbone="baseline", tracking="ste")`` vs
+    ``train_ibfe(..., backbone="fsi_param")`` (exact FSI wall). Default ``None``
+    keeps walls coincident (Ablation 7/8 isolation).
     """
     model, loss_fn = build_model_for_ibfe(
         frames, backbone=backbone, predict_scalar=predict_scalar,
         use_traction=use_traction, init_seed=seed, model_overrides=model_overrides,
         n_harmonics=n_harmonics)
     loss_fn.anneal.total_steps = steps
+    wall_tracking = tracking if backbone == "baseline" else None
     build_batches = make_ibfe_batch_builder(
         frames, transducers=transducers, noise_level=noise_level, seed=seed,
         use_traction=use_traction, predict_scalar=predict_scalar,
         shuffle_forcing=shuffle_forcing, forcing_control=forcing_control,
         param_forcing=(backbone == "fsi_param"), band_frac=band_frac,
-        planes=planes)
+        planes=planes, tracking=wall_tracking)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

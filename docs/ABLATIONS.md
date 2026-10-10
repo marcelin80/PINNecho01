@@ -7,6 +7,7 @@
 > [`docs/results/ablation6.json`](results/ablation6.json) (Ablation 6, 5시드 셔플) ·
 > [`docs/results/band_oracle/`](results/band_oracle/) (Ablation 7, 밴드-국소 오라클 dry-run) ·
 > [`docs/results/deliverable_model_b/`](results/deliverable_model_b/) (Ablation 8, 전달형 Model B 3-way) ·
+> [`docs/TRACKING_NOISE.md`](TRACKING_NOISE.md) (벽-트래킹 노이즈 프리셋 / STE 문헌 보정) ·
 > [`docs/results/ablations.json`](results/ablations.json) (초기 2종) · 드라이버: `src/pinnecho/train/ablation.py`, `src/pinnecho/train/band_oracle.py`
 
 ## 왜 이 실험이 필요한가 (리뷰 지적 요약)
@@ -492,9 +493,12 @@ ansatz는 단일 시간 활성화 `g(t)`·단일 진폭의 **최소** 형태(실
    → `load_ibfe_output` 투입. *Minimum Goal B(`dx = 1.875 mm`)는 포맷 검증용일 뿐이고(밴드가
    공동 체적의 43–59%만 덮음) R 통과 전까지 압력 관련 결론은 이상적 상한으로만 해석한다.
    IBAMR 실행 환경(접근/컴퓨팅) 미확보.*
-6. **baseline 노이즈 레벨(8% bias / 10% noise)은 임시값**이다. `A_exact`(노이즈 0)를 공정
-   기준선으로 병기했고, 실데이터 확보 시 실제 speckle-tracking reproducibility 문헌값으로
-   보정해야 한다.
+6. **baseline 노이즈는 이제 이름 있는 프리셋이다.** 8% bias / 10% noise는
+   **`placeholder`**(기본값, Ablation 1–6 재현용)로 남기고, 신규 실험은
+   **`tracking="ste"`**(bias −5% / RMS 9%)를 쓴다 — Houard 2021 STE-LV-GLS
+   test–retest CV 8.9%, Farsalinos 2015 inter-observer 5.4–8.6%, Amundsen 2006
+   단축 과소평가. `A_exact`(`tracking="exact"`)는 공정 무오차 기준선으로 유지.
+   상세·인용: [`docs/TRACKING_NOISE.md`](TRACKING_NOISE.md).
 
 ## 한계
 

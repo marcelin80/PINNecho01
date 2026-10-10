@@ -5,7 +5,8 @@
 > 원자료: [`docs/results/ablations_all.json`](results/ablations_all.json) (Check 0 + Ablation 1~4) ·
 > [`docs/results/ablation5.json`](results/ablation5.json) (Ablation 5) ·
 > [`docs/results/ablation6.json`](results/ablation6.json) (Ablation 6, 5시드 셔플) ·
-> [`docs/results/ablations.json`](results/ablations.json) (초기 2종) · 드라이버: `src/pinnecho/train/ablation.py`
+> [`docs/results/band_oracle/`](results/band_oracle/) (Ablation 7, 밴드-국소 오라클 dry-run) ·
+> [`docs/results/ablations.json`](results/ablations.json) (초기 2종) · 드라이버: `src/pinnecho/train/ablation.py`, `src/pinnecho/train/band_oracle.py`
 
 ## 왜 이 실험이 필요한가 (리뷰 지적 요약)
 
@@ -333,12 +334,68 @@ WSS −0.019, 둘 다 baseline 대비 1/5 승). 그리고 `forcing_exact > forci
 
 ---
 
+## Ablation 7 — 밴드-국소 forcing 오라클 (합성 dry-run, 사전 등록)
+
+**동기**: Check 0~Ablation 6은 전부 *full-cavity* manufactured forcing이다. 실 IBFE
+forcing은 (i) **밴드-국소**(공동 내부 0 ⇒ 밴드 밖 B=A)이고 (ii) 평가 전용 **오라클**이다.
+실데이터·gate R 도착 전에, 바로 그 조건을 합성데이터에서 재현해 분석 파이프라인과 대조군을
+**사전 등록**한다. `synthetic_ibfe_frames_3d(..., forcing_band_frac=0.2)`로 forcing을 벽
+밴드로 국소화(공동 내부 정확히 0)하고, 네 조건을 **같은** 지상진값에서 학습한다: `A(baseline)`
+/ `oracle-exact`(참 밴드 forcing) / `oracle-shuffle`(support-preserving 밴드-내부 셔플) /
+`oracle-band_mask`(기하 벽위치 placeholder). *forcing은 Model B 전달 입력이 아니라 오라클이다.*
+
+**설정**: dim=3, `band_frac=0.2` → 밴드가 샘플 공동 체적의 **48.1%**를 덮음(나머지 52%는 B=A).
+3시드, 1200 step + L-BFGS 150, 2 point-window, traction 미주입(forcing 항만 격리), float32.
+
+| 조건 | speed (↓) | u (↓) | w (↓) | pressure relL2 (↓) |
+|---|---|---|---|---|
+| `A (baseline)` | 0.953 ±0.002 | 0.965 | 0.928 | **1.06 ±0.02** |
+| `oracle-exact` (참 밴드 forcing) | 0.931 ±0.023 | 0.926 | 0.894 | **13.28 ±3.39** |
+| `oracle-shuffle` (support-preserving) | 0.950 ±0.004 | 0.962 | 0.924 | 3.09 ±0.60 |
+| `oracle-band_mask` (기하 대조) | 0.959 ±0.008 | 0.964 | 0.939 | 1.66 ±0.36 |
+
+paired(3시드, +Δ ⇒ 뒤 조건 오차가 더 낮음):
+
+| 비교 | pressure: Δ (t, 승) | speed: Δ (t, 승, 부호 p₁) |
+|---|---|---|
+| `exact − baseline` | **−12.22 (t=−5.10, 0/3)** | +0.022 (t=1.43, **3/3**, p₁=0.125) |
+| `exact − shuffle` | −10.20 (t=−4.38, 0/3) | +0.018 (t=1.37, 3/3, p₁=0.125) |
+| `exact − band_mask` | −11.62 (t=−4.90, 0/3) | +0.028 (t=2.51, 3/3, p₁=0.125) |
+
+**해석 — 두 가지 결론.**
+
+1. **압력: 밴드-국소 오라클 forcing은 압력을 *개선하지 않고 오히려 크게 악화*시킨다**
+   (relL2 13.3 vs baseline 1.06, 0/3 승). full-cavity에서 보였던 "압력 이득"(Ablation 6의
+   corr 0.63)은 forcing≈∇p가 **공동 전체**에 성립했기 때문이었는데, 밴드-국소로 바로잡으면
+   그 순환이 사라진다: 공동 내부 52%에선 B=A이고, 밴드의 coherent forcing은 관측이 없는 내부가
+   균형잡지 못하는 **허위 압력**을 유발한다. 셔플(3.09)·band_mask(1.66) 대조가 exact보다 **덜**
+   해로운 것이 그 증거다. → **"forcing이 압력을 돕는다"는 결론은 밴드-국소 조건에서 완전히
+   무너진다**(합성 상한에서조차).
+2. **속도: 미미한 궤적-특이 효과.** exact가 baseline을 speed에서 Δ0.022(3/3)로 앞서지만,
+   셔플(0.950)·band_mask(0.959)에서 거의 baseline으로 되돌아가고 크기도 시드 산포 수준이며
+   n=3 부호검정 p₁=0.125로 검정력 부족이다. Ablation 6의 "궤적-특이 누출" 교훈과 동일하되,
+   밴드-국소에선 그 효과마저 더 작다.
+
+**결론**: 실 조건(밴드-국소 + 오라클)에 가깝게 맞추면 forcing의 압력 이득은 **음(-)**이고
+속도 이득은 두 대조를 모두 통과하지 못하는 시드-산포 크기다. 이 스윕은 gate R 통과 후 실
+export에 **그대로** 돌릴 A/exact/shuffle/band_mask 분석을 사전 등록한다.
+원자료·그림: [`docs/results/band_oracle/`](results/band_oracle/). 재현:
+`python scripts/band_oracle_sweep.py --dim 3 --band-frac 0.2 --steps 1200 --seeds 0 1 2`.
+
+*한계*: 3시드(검정력 부족), exact 압력 relL2 분산 큼(±3.4), 속도는 CPU 예산에서
+compute-limited(모든 조건 speed≈0.93–0.96), traction 미주입, 합성 manufactured 밴드(실 IB_4
+커널 밴드와 형태가 다를 수 있음). 절대 수치가 아니라 **조건 간 대조**가 결과다.
+
+---
+
 ## 결론 및 권고
 
 1. **"FSI-informed가 압력을 개선한다"는 원래 주장은 죽었다.** Check 0(순환 상관 0.95) +
    Ablation 1(forcing 단독 relL2 3.9) + Ablation 3(압력은 관측 부족의 하류 증상)이 모두
    같은 방향을 가리킨다. 압력 개선은 경계 압력 주입(순환) + pressure-Poisson을 풀 만한
-   관측 확보의 문제이지, "FSI 물리항"의 공로가 아니다.
+   관측 확보의 문제이지, "FSI 물리항"의 공로가 아니다. **Ablation 7(밴드-국소 오라클 dry-run)**은
+   이를 더 강하게 못박는다: forcing을 실제처럼 밴드-국소화하면 압력 이득은 사라지는 정도가
+   아니라 **음(-)**이 된다(relL2 1.06→13.3) — full-cavity "이득"은 forcing≈∇p 순환의 산물이었다.
 2. **"구배량은 FSI로 음향창을 대체한다"는 실용적 주장도 (이 합성 설정에서는) 성립하지 않는다.**
    Ablation 6 셔플 진단이 결정적이다: 궤적-무관 forcing은 이득을 유지하지 못하고 해치며
    `forcing_exact > forcing_shuffled`이므로, 구배 이득은 **일반적 물리 정칙화가 아니라 궤적-특이

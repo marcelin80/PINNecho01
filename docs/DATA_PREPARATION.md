@@ -25,6 +25,46 @@ below and call `load_ibfe_output(path)`.
 > measurement in the whole project is the final clinical **Doppler echo** the
 > reconstruction ultimately targets.
 
+## Before you export: upstream FSI run health
+
+PINNecho treats the exported fields as ground truth, so **only export a segment
+the FSI solver actually resolved.** A run that diverged — or one that limped along
+with a chronically near-inverted element — produces fields that *look* like a valid
+NPZ but encode a numerical blow-up, not cardiac mechanics. Check these on the
+structural (IBFE) side before writing an `IBFEFrames` bundle:
+
+- **Element validity — watch `max |J-1|`, not just the mean.** The run can look
+  healthy on average (`mean |J-1| ≈ 0.02`, `p99.9 ≈ 0.45`) while a single element
+  sits at `max |J-1| ≈ 3` for thousands of steps — a chronic *sliver* at the edge
+  of inversion that eventually tips past a negative Jacobian and cascades (one
+  observed `tet10` ramp run went `max |J-1|` 3 → 7 → 68 → 4e5 and
+  `wall-volume-ratio` 1.0007 → 1.13 within three output intervals, then hit the
+  solver's `p99.9 |J-1| > 0.8` stop guard). **Do not export frames at or after the
+  interval where `max |J-1|` starts climbing**; ideally fix the sliver (mesh
+  quality near the open base / rim, element order, volumetric penalty `κ`) and
+  re-run. A good rule: export only while `p99.9 |J-1|` stays well under the stop
+  threshold *and* `max |J-1|` is stationary.
+- **Near-incompressibility — `wall volume ratio ≈ 1`.** A jump away from 1.0
+  (e.g. to 1.13) means the volumetric/incompressibility penalty lost control
+  locally; those frames are not physical.
+- **Displacement sanity.** `max displacement` should track the physiological wall
+  excursion (~1–2 cm), not spike to tens of cm. A sudden spike is the inversion
+  cascade, not motion.
+- **Time step not in free-fall.** Adaptive `dt` being cut hard (e.g. 3e-5 → 3e-6)
+  as the above degrade is the solver trying to survive an inversion it cannot fix;
+  frames from that window are suspect even if the state is still finite.
+- **Post-processing actually ran.** If the run's own PV/EDPVR comparison scripts
+  (`klotz_compare.py`, `compare_pv_runs.py`, …) failed — e.g. a bare
+  `ModuleNotFoundError: numpy` in the post-proc interpreter — that is unrelated to
+  the sim data, but it also means you have *not yet* eyeballed the PV loop; do that
+  before trusting the segment.
+
+> The validator (`validate_ibfe_frames`) catches contract errors (shapes, units,
+> non-unit normals, all-zero or full-cavity forcing) but it sees only the exported
+> point cloud — it **cannot** tell a converged frame from one taken mid-divergence.
+> That judgement has to happen upstream, from the FSI run log, using the checks
+> above.
+
 ## Quick start
 
 ```bash

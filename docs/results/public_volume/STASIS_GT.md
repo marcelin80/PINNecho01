@@ -35,5 +35,6 @@ python scripts/public_volume_stasis.py --train \
     --out docs/results/public_volume/stasis_recon.json
 ```
 
-Look at `persist_stasis_dice`, `jet_ml_true` (~30 mL) vs `jet_ml_pred`.
-It is not a thrombus.
+Look at `jet_ml_true` (~30 mL) vs `jet_ml_pred` and `jet_dice`, not only
+`persist_stasis_dice`. One-seed result:
+[`STASIS_RECON.md`](STASIS_RECON.md). It is not a thrombus.

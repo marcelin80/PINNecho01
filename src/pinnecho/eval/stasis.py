@@ -154,6 +154,12 @@ def compare_volume_stasis(
     inter = float(np.logical_and(a, b).sum())
     na, nb = float(a.sum()), float(b.sum())
     dice = (2.0 * inter / (na + nb)) if (na + nb) > 0 else 1.0
+    cavity = _mask_t(vel_true, mask).any(axis=0)
+    jet_t = cavity & np.logical_not(a)
+    jet_p = cavity & np.logical_not(b)
+    jinter = float(np.logical_and(jet_t, jet_p).sum())
+    jna, jnb = float(jet_t.sum()), float(jet_p.sum())
+    jet_dice = (2.0 * jinter / (jna + jnb)) if (jna + jnb) > 0 else 1.0
     return {
         "speed_thresh": thresh,
         "persist_stasis_ml_true": gt["persist_stasis_ml"],
@@ -161,6 +167,7 @@ def compare_volume_stasis(
         "jet_ml_true": gt["jet_ml"],
         "jet_ml_pred": pred["jet_ml"],
         "persist_stasis_dice": dice,
+        "jet_dice": jet_dice,
         "stasis_frac_true": gt["stasis_frac"],
         "stasis_frac_pred": pred["stasis_frac"],
         "speed_mean_true": gt["speed_mean"],

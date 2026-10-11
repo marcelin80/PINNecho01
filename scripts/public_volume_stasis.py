@@ -89,6 +89,7 @@ def main() -> None:
         print("volume reconstruction vs GT stasis (same cut)")
         for k in ("persist_stasis_ml_true", "persist_stasis_ml_pred",
                   "jet_ml_true", "jet_ml_pred", "persist_stasis_dice",
+                  "jet_dice",
                   "stasis_frac_true", "stasis_frac_pred",
                   "speed_mean_true", "speed_mean_pred"):
             print(f"  {k:26s} {vol[k]}")

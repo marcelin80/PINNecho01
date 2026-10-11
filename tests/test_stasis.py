@@ -81,6 +81,7 @@ def test_compare_volume_identical_is_perfect():
     vel, mask = _split_cavity_volume()
     m = compare_volume_stasis(vel, vel, mask, spacing=(0.002, 0.002, 0.002))
     assert m["persist_stasis_dice"] == 1.0
+    assert m["jet_dice"] == 1.0
     assert m["jet_ml_true"] == m["jet_ml_pred"]
     assert m["persist_stasis_ml_true"] == m["persist_stasis_ml_pred"]
 
@@ -90,6 +91,7 @@ def test_compare_volume_zero_pred_eats_the_jet():
     m = compare_volume_stasis(
         vel, np.zeros_like(vel), mask, spacing=(0.002, 0.002, 0.002))
     assert m["jet_ml_pred"] == 0.0
+    assert m["jet_dice"] == 0.0
     assert m["persist_stasis_ml_pred"] > m["persist_stasis_ml_true"]
     assert m["persist_stasis_dice"] < 1.0
 

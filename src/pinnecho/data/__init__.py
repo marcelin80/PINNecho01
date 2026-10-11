@@ -40,6 +40,11 @@ from .public_volume import (
     synthetic_public_volume_frames,
     rasterize_synthetic_lv_3d,
 )
+from .corrado_lv import (
+    convert_corrado_scan,
+    discover_mask as discover_corrado_mask,
+    load_corrado_scan,
+)
 from .tracking_noise import (
     TrackingNoise,
     PRESETS as TRACKING_PRESETS,
@@ -95,6 +100,9 @@ __all__ = [
     "has_oracle_forcing",
     "synthetic_public_volume_frames",
     "rasterize_synthetic_lv_3d",
+    "convert_corrado_scan",
+    "discover_corrado_mask",
+    "load_corrado_scan",
     "TrackingNoise",
     "TRACKING_PRESETS",
     "resolve_tracking",

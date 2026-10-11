@@ -7,6 +7,7 @@ from .metrics import (
 from .residence_time import residence_time_map, evaluate_residence_time
 from .stasis import (
     compare_point_stasis,
+    compare_registered_volumes,
     compare_volume_stasis,
     evaluate_stasis_ibfe,
     predict_volume_velocity,
@@ -28,6 +29,7 @@ __all__ = [
     "residence_time_map",
     "evaluate_residence_time",
     "compare_point_stasis",
+    "compare_registered_volumes",
     "compare_volume_stasis",
     "evaluate_stasis_ibfe",
     "predict_volume_velocity",

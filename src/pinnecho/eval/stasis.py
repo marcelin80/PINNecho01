@@ -138,11 +138,16 @@ def compare_volume_stasis(
     speed_thresh: float = DEFAULT_SPEED_THRESH,
     persist_frac: float = DEFAULT_PERSIST_FRAC,
     rho: float = 1060.0,
+    absolute: bool = False,
 ) -> Dict[str, float]:
-    """Score a reconstructed volume at the GT-resolved stasis cut."""
+    """Score a reconstructed volume at the GT-resolved stasis cut.
+
+    ``absolute=True`` keeps ``speed_thresh`` on both sides (MRI vs PIV at
+    the clinical 10 cm/s cut).
+    """
     gt = volume_stasis_report(
         vel_true, mask, spacing, speed_thresh=speed_thresh,
-        persist_frac=persist_frac, rho=rho)
+        persist_frac=persist_frac, rho=rho, absolute=absolute)
     thresh = float(gt["speed_thresh"])
     pred = volume_stasis_report(
         vel_pred, mask, spacing, speed_thresh=thresh,
@@ -174,6 +179,83 @@ def compare_volume_stasis(
         "speed_mean_pred": pred["speed_mean"],
         "cavity_ml": gt["cavity_ml"],
     }
+
+
+def _spatial_mask(mask: np.ndarray, spatial_shape) -> np.ndarray:
+    m = np.asarray(mask, dtype=bool)
+    if m.ndim == 4:
+        m = m.any(axis=0)
+    spatial_shape = tuple(int(s) for s in spatial_shape)
+    if m.shape != spatial_shape:
+        raise ValueError(f"mask {m.shape} vs grid {spatial_shape}")
+    return m
+
+
+def compare_registered_volumes(
+    vel_a: np.ndarray,
+    mask_a: np.ndarray,
+    vel_b: np.ndarray,
+    mask_b: np.ndarray,
+    spacing: np.ndarray,
+    *,
+    origin_a=None,
+    origin_b=None,
+    speed_thresh: float = DEFAULT_SPEED_THRESH,
+    persist_frac: float = DEFAULT_PERSIST_FRAC,
+    rho: float = 1060.0,
+    name_a: str = "a",
+    name_b: str = "b",
+) -> Dict[str, float]:
+    """Same-grid GT vs GT (e.g. MRI vs registered PIV) at a *fixed* cut.
+
+    Full-cavity numbers are not comparable when the masks differ. The
+    quantities that matter live on ``mask_a AND mask_b``.
+    """
+    vel_a = np.asarray(vel_a, dtype=np.float64)
+    vel_b = np.asarray(vel_b, dtype=np.float64)
+    if vel_a.shape != vel_b.shape:
+        raise ValueError(f"grids {vel_a.shape} vs {vel_b.shape} are not registered")
+    spacing = np.asarray(spacing, dtype=np.float64).reshape(3)
+    ma = _spatial_mask(mask_a, vel_a.shape[1:4])
+    mb = _spatial_mask(mask_b, vel_b.shape[1:4])
+    overlap = ma & mb
+    if not overlap.any():
+        raise ValueError("cavity masks do not overlap")
+    voxel_ml = float(np.prod(spacing)) * 1e6
+    out: Dict[str, float] = {
+        f"cavity_ml_{name_a}": float(ma.sum()) * voxel_ml,
+        f"cavity_ml_{name_b}": float(mb.sum()) * voxel_ml,
+        "overlap_ml": float(overlap.sum()) * voxel_ml,
+        f"overlap_frac_of_{name_a}": float(overlap.sum() / max(int(ma.sum()), 1)),
+        "speed_thresh": float(speed_thresh),
+    }
+    if origin_a is not None and origin_b is not None:
+        delta = (np.asarray(origin_a, dtype=np.float64).reshape(3)
+                 - np.asarray(origin_b, dtype=np.float64).reshape(3))
+        out["origin_delta_m"] = float(np.linalg.norm(delta))
+        out["origin_delta_vox"] = float(np.linalg.norm(delta / spacing))
+    full_a = volume_stasis_report(
+        vel_a, ma, spacing, speed_thresh=speed_thresh,
+        persist_frac=persist_frac, rho=rho, absolute=True)
+    full_b = volume_stasis_report(
+        vel_b, mb, spacing, speed_thresh=speed_thresh,
+        persist_frac=persist_frac, rho=rho, absolute=True)
+    ov = compare_volume_stasis(
+        vel_a, vel_b, overlap, spacing, speed_thresh=speed_thresh,
+        persist_frac=persist_frac, rho=rho, absolute=True)
+    interior = np.broadcast_to(overlap, vel_a.shape[:4])
+    sa = np.linalg.norm(vel_a, axis=-1)[interior]
+    sb = np.linalg.norm(vel_b, axis=-1)[interior]
+    denom = float(np.linalg.norm(sa))
+    out["overlap_speed_relL2"] = float(
+        np.linalg.norm(sa - sb) / max(denom, 1e-12))
+    for k, v in full_a.items():
+        out[f"{name_a}_{k}"] = v
+    for k, v in full_b.items():
+        out[f"{name_b}_{k}"] = v
+    for k, v in ov.items():
+        out[f"overlap_{k}"] = v
+    return out
 
 
 @torch.no_grad()

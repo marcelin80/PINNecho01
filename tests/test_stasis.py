@@ -9,8 +9,8 @@ from pinnecho.config import Config
 from pinnecho.data import synthetic_public_volume_frames
 from pinnecho.data.ibfe_dataset import evaluate_ibfe, train_ibfe
 from pinnecho.eval.stasis import (
-    compare_point_stasis, compare_volume_stasis, resolve_speed_thresh,
-    volume_stasis_report,
+    compare_point_stasis, compare_registered_volumes, compare_volume_stasis,
+    resolve_speed_thresh, volume_stasis_report,
 )
 
 
@@ -84,6 +84,47 @@ def test_compare_volume_identical_is_perfect():
     assert m["jet_dice"] == 1.0
     assert m["jet_ml_true"] == m["jet_ml_pred"]
     assert m["persist_stasis_ml_true"] == m["persist_stasis_ml_pred"]
+
+
+def test_absolute_report_keeps_clinical_cut_on_slow_field():
+    vel, mask = _split_cavity_volume()
+    vel = vel * 0.1  # p99 well below 10 cm/s
+    auto = volume_stasis_report(
+        vel, mask, spacing=(0.002, 0.002, 0.002), speed_thresh=0.10)
+    fixed = volume_stasis_report(
+        vel, mask, spacing=(0.002, 0.002, 0.002), speed_thresh=0.10,
+        absolute=True)
+    assert auto["speed_thresh"] < 0.10
+    assert fixed["speed_thresh"] == 0.10
+    assert fixed["jet_ml"] < auto["jet_ml"]
+
+
+def test_registered_compare_uses_overlap_mask():
+    vel, mask = _split_cavity_volume()
+    other = vel.copy()
+    other_mask = np.zeros_like(mask)
+    other_mask[2:6, 4:6, 2:6] = True  # jet half only
+    other[:, other_mask, :] *= 0.2  # 0.40 → 0.08, below the 10 cm/s cut
+    m = compare_registered_volumes(
+        vel, mask, other, other_mask, (0.002, 0.002, 0.002),
+        origin_a=(0.0, 0.0, 0.0), origin_b=(0.0, 0.0, 0.0),
+        name_a="mri", name_b="piv")
+    assert m["cavity_ml_piv"] < m["cavity_ml_mri"]
+    assert m["overlap_ml"] == m["cavity_ml_piv"]
+    assert m["origin_delta_vox"] == 0.0
+    assert m["overlap_jet_ml_true"] > m["overlap_jet_ml_pred"]
+    assert 0.0 <= m["overlap_jet_dice"] <= 1.0
+
+
+def test_registered_compare_rejects_unaligned_grids():
+    vel, mask = _split_cavity_volume()
+    try:
+        compare_registered_volumes(
+            vel, mask, vel[:, :-1], mask[:-1], (0.002, 0.002, 0.002))
+    except ValueError as exc:
+        assert "not registered" in str(exc)
+    else:
+        raise AssertionError("expected grid mismatch")
 
 
 def test_compare_volume_zero_pred_eats_the_jet():

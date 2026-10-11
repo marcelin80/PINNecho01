@@ -126,6 +126,16 @@ _meta      [cycle_period, rho, mu, 3]
 ```
 
 `load_ibfe_output("volume.npz")` dispatches on the `velocity`+`mask` keys.
+
+Corrado LV phantom (OSF [2naw4](https://osf.io/2naw4/), `VELX/VELY/VELZ` in
+mm/s + `Mask_VIPR_Day1.nii.gz`):
+
+```bash
+python scripts/convert_corrado_lv.py \
+    --scan "data/corrado_lv_phantom/MRI_Data/Day 1/PC VIPR/30_Minutes" \
+    --out data/corrado_lv_phantom/day1_vipr_30min.npz
+```
+
 Template (synthetic LV rasterised onto a grid, not a public dataset):
 
 ```bash

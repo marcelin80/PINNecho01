@@ -42,6 +42,28 @@ The oracle-forcing question waits for solver-native `f`.
 The volume must cover the **LV cavity**. Thoracic-aorta 4D-flow is the wrong
 anatomy for this experiment.
 
+The first public LV-cavity volume this repo converts is the Wisconsin in-vitro
+phantom (Corrado et al., *Magn Reson Med* 2021, DOI 10.1002/mrm.28698;
+[OSF 2naw4](https://osf.io/2naw4/)). It is a **rigid** silicone LV + pulsatile
+pump: 3-component velocity and a cavity mask, no pressure, no IB force. Use
+the longest MRI scan as observability GT; PIV registered to that day is an
+optional optical reference, not a substitute for `f`.
+
+```bash
+# after unpacking OSF MRI_Data.tar.gz / PIV_Data.tar.gz under data/corrado_lv_phantom/
+python scripts/convert_corrado_lv.py \
+    --scan "data/corrado_lv_phantom/MRI_Data/Day 1/PC VIPR/30_Minutes" \
+    --out data/corrado_lv_phantom/day1_vipr_30min.npz
+
+python scripts/public_volume_ab.py --which observability \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --windows 1 2 3 --steps 400 --seeds 0 \
+    --out docs/results/public_volume
+```
+
+`--stride 2` keeps every other frame if the 30-minute series is too long for a
+first pass. `pip install nibabel` is required for the NIfTI read.
+
 ## On-disk contract
 
 Convert any 4D-flow / phantom release into one NPZ:

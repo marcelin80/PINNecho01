@@ -40,7 +40,9 @@ Pressure is **not** a metric (4D-flow does not measure `p`). A vs
 The oracle-forcing question waits for solver-native `f`.
 
 The volume must cover the **LV cavity**. Thoracic-aorta 4D-flow is the wrong
-anatomy for this experiment.
+anatomy for this experiment. The next *measured* candidate (not yet opened)
+is OSU rest 4D-flow k-space, Zenodo 12515230 — see
+[`data/OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
 The first public LV-cavity volume this repo converts is the Wisconsin in-vitro
 phantom (Corrado et al., *Magn Reson Med* 2021, DOI 10.1002/mrm.28698;
@@ -96,6 +98,34 @@ python scripts/public_volume_ab.py --which ab --volume path/to/volume.npz
 
 `validate_ibfe_frames` warns that `f` and traction are zero and that this is a
 public volume, not an IBFE oracle.
+
+Corrado 2000-step / 3-seed table:
+[`results/public_volume/CORRADO_OBSERVABILITY.md`](results/public_volume/CORRADO_OBSERVABILITY.md).
+Do not rerun that sweep unless the conversion or the windows change.
+
+Eulerian stasis (kinematic marker, **not** a thrombus solver) on the same NPZ.
+GT table (10 cm/s): [`results/public_volume/STASIS_GT.md`](results/public_volume/STASIS_GT.md)
+(195 mL cavity, 165 mL persistent stasis, ~30 mL moving jet).
+One-seed recon: [`results/public_volume/STASIS_RECON.md`](results/public_volume/STASIS_RECON.md)
+(1-window jet 23.7 mL / Dice 0.75; 3-window 26.2 mL / ≈0.80).
+MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md)
+(PIV FOV is the 73 mL stasis sea; the 30 mL MRI jet is outside it).
+Echo-plane slabs vs that jet (no train):
+[`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md)
+(A4C 22.3 / 30.4 mL at the fat 0.12 AABB slab; PLAX = A4C).
+Jet-preserve lever (`|v_beam|` only, not the GT jet):
+[`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md).
+1- vs 3-window jet +2.5 mL is a one-seed hypothesis.
+
+```bash
+python scripts/public_volume_stasis.py \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --out docs/results/public_volume/stasis_gt.json
+python scripts/public_volume_stasis.py --train \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --steps 2000 --n-windows 3 --seed 0 \
+    --out docs/results/public_volume/stasis_recon.json
+```
 
 ## What the numbers mean
 

@@ -198,6 +198,38 @@ def build_doppler_from_frames(frames, transducers: Sequence,
     return torch.cat(Xs, 0), torch.cat(beams, 0), torch.cat(vs, 0)
 
 
+def _stratified_randint(n_keep, fast_mask, generator, fast_frac):
+    """Draw ``n_keep`` indices; ``fast_frac`` come from ``fast_mask`` True entries.
+
+    ``fast_mask`` must be an observable (e.g. ``|v_beam|``), never a GT jet mask.
+    """
+    n_total = int(fast_mask.numel())
+    if n_total == 0:
+        return torch.zeros(0, dtype=torch.long)
+    if fast_frac is None or float(fast_frac) <= 0.0:
+        if n_keep >= n_total:
+            return torch.arange(n_total)
+        return torch.randint(0, n_total, (n_keep,), generator=generator)
+    fast_idx = torch.nonzero(fast_mask, as_tuple=False).reshape(-1)
+    slow_idx = torch.nonzero(~fast_mask, as_tuple=False).reshape(-1)
+    n_fast = min(int(round(float(fast_frac) * n_keep)), int(fast_idx.numel()), n_keep)
+    n_slow = min(n_keep - n_fast, int(slow_idx.numel()))
+    leftover = n_keep - n_fast - n_slow
+    if leftover > 0 and int(fast_idx.numel()) - n_fast >= leftover:
+        n_fast += leftover
+    elif leftover > 0:
+        n_slow = min(n_slow + leftover, int(slow_idx.numel()))
+    parts = []
+    if n_fast:
+        perm = torch.randperm(fast_idx.numel(), generator=generator)[:n_fast]
+        parts.append(fast_idx[perm])
+    if n_slow:
+        perm = torch.randperm(slow_idx.numel(), generator=generator)[:n_slow]
+        parts.append(slow_idx[perm])
+    idx = torch.cat(parts) if parts else torch.zeros(0, dtype=torch.long)
+    return idx[torch.randperm(idx.numel(), generator=generator)]
+
+
 def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             noise_level: float = 0.05, seed: int = 0,
                             n_data: int = 3072, n_col: int = 3072,
@@ -209,7 +241,9 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             param_forcing: bool = False,
                             band_frac: float = 0.35,
                             planes: Optional[Sequence] = None,
-                            tracking: Optional[str] = None):
+                            tracking: Optional[str] = None,
+                            data_fast_frac: Optional[float] = None,
+                            data_fast_thresh: float = 0.10):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
     **Forcing is evaluation-only ground truth (an oracle), not a deliverable
@@ -240,6 +274,11 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     so Ablation 7/8 coincident-wall isolation is unchanged). Pass ``"ste"`` for
     the literature-calibrated tracking error when comparing a realistic Model A
     against an accurate-wall Model B.
+
+    ``data_fast_frac`` oversamples Doppler rows with ``|v_beam| >= data_fast_thresh``.
+    That threshold is on the **observed** beam component, not the 3-component GT
+    jet. Using the GT persist/jet mask here is the same circularity as feeding
+    oracle ``f``. Collocation stays uniform.
     """
     from .ibfe_io import frames_to_dtype
     from .tracking_noise import apply_tracking_noise, resolve_tracking
@@ -260,6 +299,7 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
         data_X, beam_dir, v_beam = build_doppler_from_frames(
             frames, transducers, noise_level=noise_level, seed=seed)
     g = torch.Generator().manual_seed(seed)
+    data_fast = v_beam.abs().reshape(-1) >= float(data_fast_thresh)
 
     forcing_fluid = frames.forcing_fluid
     mode = forcing_control if forcing_control is not None else (
@@ -283,7 +323,7 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
         return torch.randint(0, n_total, (n,), generator=g)
 
     def build_batches(step: int) -> Dict[str, dict]:
-        di = _idx(data_X.shape[0], n_data)
+        di = _stratified_randint(n_data, data_fast, g, data_fast_frac)
         ci = _idx(frames.coords_fluid.shape[0], n_col)
         wi = _idx(frames.coords_wall.shape[0], n_wall)
         batches = {
@@ -391,6 +431,9 @@ def evaluate_ibfe(model, frames) -> Dict[str, float]:
     out["vel_relL2_speed"] = float(
         torch.linalg.norm(vel_pred - vel_true) / (torch.linalg.norm(vel_true) + 1e-12))
 
+    from ..eval.stasis import evaluate_stasis_ibfe
+    out.update(evaluate_stasis_ibfe(vel_true, vel_pred))
+
     with torch.no_grad():
         p_pred = model.fields(X.clone())["p"]
     p_pred = p_pred - p_pred.mean()
@@ -416,7 +459,10 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                shuffle_forcing: bool = False, forcing_control: Optional[str] = None,
                band_frac: float = 0.35, n_harmonics: int = 2,
                planes: Optional[Sequence] = None,
-               tracking: Optional[str] = None):
+               tracking: Optional[str] = None,
+               n_data: int = 3072,
+               data_fast_frac: Optional[float] = None,
+               data_fast_thresh: float = 0.10):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
     ``backbone="fsi_param"`` trains the **deliverable** Model B (accurate FSI wall
@@ -447,7 +493,9 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
         use_traction=use_traction, predict_scalar=predict_scalar,
         shuffle_forcing=shuffle_forcing, forcing_control=forcing_control,
         param_forcing=(backbone == "fsi_param"), band_frac=band_frac,
-        planes=planes, tracking=wall_tracking)
+        planes=planes, tracking=wall_tracking,
+        n_data=int(n_data), data_fast_frac=data_fast_frac,
+        data_fast_thresh=data_fast_thresh)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

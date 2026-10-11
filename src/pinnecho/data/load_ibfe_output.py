@@ -94,6 +94,8 @@ def load_ibfe_output(
     n_fluid: Optional[int] = None,
     n_wall: Optional[int] = None,
     seed: int = 0,
+    fast_frac: Optional[float] = None,
+    fast_thresh: float = 0.10,
 ) -> IBFEFrames:
     """Load one cardiac cycle of IBAMR/IBFE output into :class:`IBFEFrames`.
 
@@ -131,7 +133,8 @@ def load_ibfe_output(
         from .public_volume import is_public_volume_npz, load_public_volume_npz
         if is_public_volume_npz(p):
             frames = load_public_volume_npz(
-                p, n_fluid=n_fluid, n_wall=n_wall, seed=seed, dtype=dtype)
+                p, n_fluid=n_fluid, n_wall=n_wall, seed=seed, dtype=dtype,
+                fast_frac=fast_frac, fast_thresh=fast_thresh)
         else:
             frames = load_ibfe_npz(p, dtype=dtype)
     elif p.suffix in (".yaml", ".yml"):

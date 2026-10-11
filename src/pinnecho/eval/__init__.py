@@ -5,6 +5,15 @@ from .metrics import (
     velocity_gradient,
 )
 from .residence_time import residence_time_map, evaluate_residence_time
+from .slab_coverage import slab_coverage_report
+from .stasis import (
+    compare_point_stasis,
+    compare_registered_volumes,
+    compare_volume_stasis,
+    evaluate_stasis_ibfe,
+    predict_volume_velocity,
+    volume_stasis_report,
+)
 from .visualize import (
     plot_ab_panels,
     plot_metric_bars,
@@ -20,6 +29,13 @@ __all__ = [
     "velocity_gradient",
     "residence_time_map",
     "evaluate_residence_time",
+    "compare_point_stasis",
+    "compare_registered_volumes",
+    "compare_volume_stasis",
+    "evaluate_stasis_ibfe",
+    "predict_volume_velocity",
+    "volume_stasis_report",
+    "slab_coverage_report",
     "plot_ab_panels",
     "plot_metric_bars",
     "animate_cycle",

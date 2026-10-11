@@ -77,12 +77,20 @@ def frames_from_public_volume(
     n_wall: Optional[int] = None,
     seed: int = 0,
     dtype: torch.dtype = torch.float32,
+    fast_frac: Optional[float] = None,
+    fast_thresh: float = 0.10,
 ) -> IBFEFrames:
     """Pack a structured velocity volume into :class:`IBFEFrames`.
 
     ``forcing_fluid`` and ``traction_wall`` are zeros. ``pressure_fluid`` is
     zero unless ``pressure`` is given. ``n_fluid`` / ``n_wall`` cap the *total*
     point counts (evenly across frames) so a fine 4D-flow grid stays tractable.
+
+    ``fast_frac`` here is an **oracle** draw on GT ``|u|`` (the 3-component
+    jet). Do not use it as the jet-preserve experiment — that tells the
+    trainer where the jet is. The deliverable lever is
+    ``data_fast_frac`` on ``|v_beam|`` in :func:`make_ibfe_batch_builder`.
+    ``None`` keeps the uniform cap.
     """
     velocity = np.asarray(velocity, dtype=np.float64)
     if velocity.ndim != 5 or velocity.shape[-1] != 3:
@@ -123,7 +131,9 @@ def frames_from_public_volume(
             velocity[k], mask[k],
             None if pressure is None else pressure[k],
             spacing, origin, float(times[k]))
-        fc, fv, fp = _cap(rng, n_f_each, fc, fv, fp)
+        speed = np.linalg.norm(fv, axis=-1)
+        fc, fv, fp = _cap_stratified(
+            rng, n_f_each, speed, fast_thresh, fast_frac, fc, fv, fp)
         wc, wn, wv = _cap(rng, n_w_each, wc, wn, wv)
         fluid_c.append(fc); fluid_v.append(fv); fluid_p.append(fp)
         wall_c.append(wc); wall_n.append(wn); wall_v.append(wv)
@@ -164,6 +174,36 @@ def _cap(rng, n_keep, *arrays):
     if n_keep is None or n <= n_keep or n == 0:
         return arrays
     idx = rng.choice(n, size=n_keep, replace=False)
+    return tuple(a[idx] for a in arrays)
+
+
+def _cap_stratified(rng, n_keep, speed, fast_thresh, fast_frac, *arrays):
+    """Like ``_cap``, but ``fast_frac`` of the draw comes from fast voxels."""
+    if fast_frac is None or float(fast_frac) <= 0.0:
+        return _cap(rng, n_keep, *arrays)
+    n = arrays[0].shape[0]
+    if n_keep is None or n <= n_keep or n == 0:
+        return arrays
+    speed = np.asarray(speed, dtype=np.float64).reshape(-1)
+    if speed.shape[0] != n:
+        raise ValueError(f"speed length {speed.shape[0]} != n={n}")
+    fast = speed >= float(fast_thresh)
+    fast_idx = np.flatnonzero(fast)
+    slow_idx = np.flatnonzero(np.logical_not(fast))
+    n_fast_want = min(int(round(float(fast_frac) * n_keep)), n_keep, fast_idx.size)
+    n_slow_want = min(n_keep - n_fast_want, slow_idx.size)
+    # Fill leftovers from the other pool if one side is short.
+    leftover = n_keep - n_fast_want - n_slow_want
+    if leftover > 0 and fast_idx.size - n_fast_want >= leftover:
+        n_fast_want += leftover
+    elif leftover > 0:
+        n_slow_want = min(n_slow_want + leftover, slow_idx.size)
+    pick_f = (rng.choice(fast_idx, size=n_fast_want, replace=False)
+              if n_fast_want else np.zeros(0, dtype=int))
+    pick_s = (rng.choice(slow_idx, size=n_slow_want, replace=False)
+              if n_slow_want else np.zeros(0, dtype=int))
+    idx = np.concatenate([pick_f, pick_s])
+    rng.shuffle(idx)
     return tuple(a[idx] for a in arrays)
 
 
@@ -247,6 +287,7 @@ def load_public_volume_npz(
     path: str | Path, *,
     n_fluid: Optional[int] = None, n_wall: Optional[int] = None,
     seed: int = 0, dtype: torch.dtype = torch.float32,
+    fast_frac: Optional[float] = None, fast_thresh: float = 0.10,
 ) -> IBFEFrames:
     """Load a public-volume NPZ into :class:`IBFEFrames` (``f = 0``)."""
     path = Path(path)
@@ -262,7 +303,8 @@ def load_public_volume_npz(
             data["times"],
             pressure=data["pressure"] if "pressure" in data.files else None,
             cycle_period=float(meta[0]), rho=float(meta[1]), mu=float(meta[2]),
-            n_fluid=n_fluid, n_wall=n_wall, seed=seed, dtype=dtype)
+            n_fluid=n_fluid, n_wall=n_wall, seed=seed, dtype=dtype,
+            fast_frac=fast_frac, fast_thresh=fast_thresh)
     finally:
         data.close()
 

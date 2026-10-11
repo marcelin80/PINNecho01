@@ -21,7 +21,9 @@ and still leak the 30 mL core. Persist Dice stays ~0.96 because 84 % of
 the cavity is already the stasis sea — do not quote it.
 
 This is **not** enough for residence-time or thrombus maps. Layer 1
-window-contrast on the jet is closed. Do not rerun.
+window-contrast on the jet is closed. Registered PIV does not referee
+that 30 mL: it never sees it ([`STASIS_PIV.md`](STASIS_PIV.md)).
+Do not rerun.
 
 Laptop JSON: `stasis_recon_w1.json` (1 window), `stasis_recon.json` (3 windows).
 3-window `jet_dice` is derived from the same voxel-volume identity as

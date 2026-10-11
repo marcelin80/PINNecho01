@@ -1,36 +1,26 @@
-# Corrado — MRI vs registered PIV (do not quote the auto-cut row)
+# Corrado — MRI vs registered PIV (10 cm/s, overlap)
 
-PIV (`PIV_Data/Registered to Day 1/PC VIPR/Average Beat`) is on the **same
-71×53×87×20 grid** as Day 1 PC VIPR 30 min, but it is **not** the same
-cavity. The naive GT dump used the auto-shrink heuristic (`p99 ≈ 9.5 cm/s
-< 10 cm/s` → cut 2.4 cm/s) on the PIV mask alone:
+Same 71×53×87×20 grid, `origin_delta_vox = 0`. PIV mask sits entirely
+inside the MRI cavity (73 / 195 mL = 37 %). Fixed clinical cut. No PINN.
+Not a thrombus.
 
-| | MRI (10 cm/s) | PIV auto (2.4 cm/s) |
-|---|---|---|
-| cavity | 195.0 mL | **73.0 mL** |
-| persist | 164.6 mL | 17.4 mL |
-| jet | 30.4 mL | 55.6 mL |
-| speed mean | 6.16 cm/s | 3.95 cm/s |
-| speed p99 | 26.1 cm/s | 9.5 cm/s |
+| | MRI full | PIV full | overlap (73 mL) |
+|---|---|---|---|
+| jet at 10 cm/s | **30.4 mL** | 0.016 mL | MRI **0.0** / PIV 0.016 |
+| persist Dice | | | 0.9999 |
+| jet Dice | | | 0.0 |
+| speed mean | 6.16 cm/s | 3.95 cm/s | MRI 3.75 / PIV 3.95 |
+| speed p99 | 26.1 cm/s | 9.5 cm/s | |
+| speed relL2 | | | 0.487 |
 
-Do **not** compare 30.4 vs 55.6. Different mask, different cut. Units look
-fine (`mm/s` → m/s; PIV `speed_max` 15 cm/s is physically plausible). The
-PIV FOV is ~37 % of the MRI cavity.
+The MRI 30.4 mL jet is **entirely outside the PIV FOV**. On the overlap both
+fields are the stasis sea (persist Dice 0.9999). PIV `p99` is 9.5 cm/s, so
+almost no PIV voxel crosses 10 cm/s (two voxels, 0.016 mL). Speed means on
+the overlap agree at ~4 cm/s; the vector field still differs (relL2 0.49).
 
-The comparison that matters is the **overlap mask at a fixed 10 cm/s cut**.
-That command is `--volume` MRI `--other` PIV (no `--train`):
+PIV cannot referee the PINN jet (23.7 / 26.2 vs 30.4 mL). It never sees that
+jet. The auto-cut PIV row (2.4 cm/s, “jet” 55.6 mL) is not a comparison —
+different mask, different cut. Do not quote it.
 
-```bash
-PYTHONPATH=src python3 scripts/public_volume_stasis.py \
-    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
-    --other data/corrado_lv_phantom/day1_piv_avg.npz \
-    --speed-thresh 0.10 \
-    --out docs/results/public_volume/stasis_mri_vs_piv.json
-```
-
-Look at `overlap_ml`, `overlap_jet_ml_true` (MRI), `overlap_jet_ml_pred`
-(PIV), `overlap_jet_dice`, `overlap_speed_relL2`, `origin_delta_vox`.
-If `piv_jet_ml` at 10 cm/s is ~0, PIV cannot police the MRI 30 mL jet:
-almost no PIV voxel reaches that cut.
-
-Not a thrombus. Not a PINN result.
+Laptop JSON: `docs/results/public_volume/stasis_mri_vs_piv.json`.
+Do not rerun.

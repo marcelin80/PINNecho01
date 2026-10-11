@@ -107,7 +107,7 @@ GT table (10 cm/s): [`results/public_volume/STASIS_GT.md`](results/public_volume
 One-seed recon: [`results/public_volume/STASIS_RECON.md`](results/public_volume/STASIS_RECON.md)
 (1-window jet 23.7 mL / Dice 0.75; 3-window 26.2 mL / ≈0.80).
 MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md)
-(PIV cavity is 73 mL; do not quote the 2.4 cm/s auto-cut).
+(PIV FOV is the 73 mL stasis sea; the 30 mL MRI jet is outside it).
 
 ```bash
 python scripts/public_volume_stasis.py \

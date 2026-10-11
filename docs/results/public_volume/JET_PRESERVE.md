@@ -11,11 +11,13 @@ collocation stays uniform. Fluid point clouds stay uniform
 
 `--fast-frac` on `scripts/public_volume_stasis.py` now means `|v_beam|`.
 
-The 1-window 23.7 mL vs 3-window 26.2 mL contrast is **one seed**. Treat
-“windows protect the jet a little” as a **hypothesis** until a 3-seed
-paired comparison exists. Score the same `vel_pred` at 5 / 10 / 15 cm/s
-(`--cuts`). Jet millilitres are a threshold remainder, not a physical
-object.
+A (this file’s companion): 3-window × 3 seed is recorded
+([`STASIS_RECON_SEEDS.md`](STASIS_RECON_SEEDS.md)). 10 cm/s jet
+24.2–26.2 mL; 15 cm/s Dice ~0.56. Do not rerun A.
+
+The 1-window 23.7 vs 3-window 26.2 mL contrast is **still one seed**.
+Treat “windows protect the jet a little” as a hypothesis until C exists.
+Jet millilitres are a threshold remainder: 15 cm/s is the core that fails.
 
 `w` relL2 rose with window count (0.260 → 0.356). That may be dilution
 (fixed `n_data`, larger pool) or an optimisation trade-off. One control:

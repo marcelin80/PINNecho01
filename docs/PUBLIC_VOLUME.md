@@ -40,7 +40,9 @@ Pressure is **not** a metric (4D-flow does not measure `p`). A vs
 The oracle-forcing question waits for solver-native `f`.
 
 The volume must cover the **LV cavity**. Thoracic-aorta 4D-flow is the wrong
-anatomy for this experiment.
+anatomy for this experiment. The next *measured* candidate (not yet opened)
+is OSU rest 4D-flow k-space, Zenodo 12515230 — see
+[`data/OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
 The first public LV-cavity volume this repo converts is the Wisconsin in-vitro
 phantom (Corrado et al., *Magn Reson Med* 2021, DOI 10.1002/mrm.28698;

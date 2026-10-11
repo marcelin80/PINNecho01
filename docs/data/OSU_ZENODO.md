@@ -38,9 +38,13 @@ Do this on the laptop that has MATLAB. Do not stop the Corrado A train.
 
 1. **Download rest k-space only** (`4D_Flow_Cartesian_Dataset_11.mat`, 807 MB)
    plus clone `OSU-MR/motion-robust-CMR`. Cite CC BY 4.0 / Arshad 2024.
-2. **Reconstruct** with the official Study IV script (CORe). Expect a
-   20-frame 3-component velocity (+ magnitude). Paper wall-clock ~11 min.
-   If MATLAB is missing, stop — do not rewrite CORe in Python.
+2. **Reconstruct** with
+   `3D cine-4D flow MRI Reconstruction (Study III IV V)/main_recon.m`.
+   Prompts: save name; `flow=1`; `rest=1`; pick the rest `.mat`.
+   Use `recon=["core"]` only (skip CS) and `opt.use_gpu=1` if a GPU exists.
+   Output is `outputs.thetaX/Y/Z` (**phase**, not m/s) plus magnitude
+   `outputs.xHat`. Convert with the scan VENC. Paper wall-clock ~11 min.
+   If MATLAB ≥ 2019 is missing, stop — do not rewrite CORe in Python.
 3. **LV cavity, not aorta.** Segment or threshold a cavity mask that includes
    the LV chamber. If the usable mask is aortic arch / LVOT only, **fail**
    (wrong anatomy for this project, same as 4DFlowNet).

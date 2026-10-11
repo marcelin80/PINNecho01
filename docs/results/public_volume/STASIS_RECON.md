@@ -14,18 +14,16 @@ observability seed-0 rows (1-window 0.516 vs ~0.51; 3-window 0.417 vs 0.418).
 | speed mean | 6.16 cm/s | 5.70 cm/s | 5.68 cm/s |
 | vel_relL2_speed | | 0.516 | 0.417 |
 
-Extra windows recover **2.5 mL** of the jet and raise moving-region Dice
-0.75 → 0.80 **on seed 0 only**. Treat “windows protect the jet a little”
-as a hypothesis until a 3-seed paired table exists
-([`JET_PRESERVE.md`](JET_PRESERVE.md)). Both reconstructions are slightly
-too slow (~5.7 cm/s) and still leak the 30 mL core. Persist Dice stays
-~0.96 because 84 % of the cavity is already the stasis sea — do not quote
-it. Jet mL is the 10 cm/s remainder; check 5/10/15 cm/s on the next runs.
+Extra windows recover **2.5 mL** of the jet **on seed 0 only**. The
+3-window leak itself is now 3-seed
+([`STASIS_RECON_SEEDS.md`](STASIS_RECON_SEEDS.md)): 10 cm/s jet
+24.2–26.2 mL (Dice ~0.81); 15 cm/s core Dice ~0.56. “Windows protect the
+jet” is still a hypothesis until 1-window is paired on the same seeds.
+Persist Dice stays ~0.96 — do not quote it.
 
-This is **not** enough for residence-time or thrombus maps. Layer 1
-window-contrast on the jet is closed. Registered PIV does not referee
-that 30 mL: it never sees it ([`STASIS_PIV.md`](STASIS_PIV.md)).
-Do not rerun.
+This is **not** enough for residence-time or thrombus maps. Registered
+PIV does not referee that 30 mL ([`STASIS_PIV.md`](STASIS_PIV.md)).
+Do not rerun these one-seed files.
 
 Laptop JSON: `stasis_recon_w1.json` (1 window), `stasis_recon.json` (3 windows).
 3-window `jet_dice` is derived from the same voxel-volume identity as

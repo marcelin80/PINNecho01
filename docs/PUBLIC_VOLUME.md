@@ -108,6 +108,8 @@ One-seed recon: [`results/public_volume/STASIS_RECON.md`](results/public_volume/
 (1-window jet 23.7 mL / Dice 0.75; 3-window 26.2 mL / ≈0.80).
 MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md)
 (PIV FOV is the 73 mL stasis sea; the 30 mL MRI jet is outside it).
+Echo-plane slabs vs that jet (no train):
+[`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md).
 
 ```bash
 python scripts/public_volume_stasis.py \

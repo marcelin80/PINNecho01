@@ -109,7 +109,8 @@ One-seed recon: [`results/public_volume/STASIS_RECON.md`](results/public_volume/
 MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md)
 (PIV FOV is the 73 mL stasis sea; the 30 mL MRI jet is outside it).
 Echo-plane slabs vs that jet (no train):
-[`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md).
+[`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md)
+(A4C 22.3 / 30.4 mL at the fat 0.12 AABB slab; PLAX = A4C).
 
 ```bash
 python scripts/public_volume_stasis.py \

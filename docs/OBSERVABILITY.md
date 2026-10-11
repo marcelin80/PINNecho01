@@ -104,6 +104,40 @@ python scripts/observability_sweep.py --backbone baseline --no-traction \
 
 ---
 
+# Public LV phantom (Corrado 4D-flow)
+
+The manufactured sweep above is the claim. This section is the first
+**non-manufactured** repeat on an LV-cavity velocity volume: Corrado et al.
+in-vitro 4D-flow (OSF 2naw4), Day 1 / PC VIPR / 30 min, `f = 0`, no pressure.
+Full note: [`results/public_volume/CORRADO_OBSERVABILITY.md`](results/public_volume/CORRADO_OBSERVABILITY.md).
+
+3D windows are apical (`w`) + lateral-x (`u`) + lateral-y (`v`). Baseline
+only, 2000 Adam + 50 L-BFGS, 3 seeds.
+
+| condition | speed | u | v | w |
+|---|---|---|---|---|
+| windows=1 | 0.506 | 0.728 | 0.898 | **0.260** |
+| windows=2 | 0.432 | **0.409** | 0.834 | 0.339 |
+| windows=3 | **0.418** | 0.423 | **0.690** | 0.356 |
+
+Same lever as the manufactured table: adding a direction recovers that
+component; the already-observed apical `w` pays a small tax. Absolute errors
+remain large (`speed` 0.42) — enough to report the *direction* of the
+window-count effect, not enough to treat the reconstructed field as a
+residence-time / thrombus input.
+
+```bash
+python scripts/convert_corrado_lv.py \
+    --scan "data/corrado_lv_phantom/MRI_Data/Day 1/PC VIPR/30_Minutes" \
+    --out data/corrado_lv_phantom/day1_vipr_30min.npz
+python scripts/public_volume_ab.py --which observability \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --windows 1 2 3 --steps 2000 --seeds 0 1 2 \
+    --out docs/results/public_volume
+```
+
+---
+
 # Plane-coverage observability in 3D (standard echo views)
 
 The 2D sweep above abstracts each window as a point that sees the **whole**

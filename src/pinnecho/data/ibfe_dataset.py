@@ -391,6 +391,9 @@ def evaluate_ibfe(model, frames) -> Dict[str, float]:
     out["vel_relL2_speed"] = float(
         torch.linalg.norm(vel_pred - vel_true) / (torch.linalg.norm(vel_true) + 1e-12))
 
+    from ..eval.stasis import evaluate_stasis_ibfe
+    out.update(evaluate_stasis_ibfe(vel_true, vel_pred))
+
     with torch.no_grad():
         p_pred = model.fields(X.clone())["p"]
     p_pred = p_pred - p_pred.mean()

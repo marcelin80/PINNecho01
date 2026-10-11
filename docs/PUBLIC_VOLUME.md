@@ -97,6 +97,18 @@ python scripts/public_volume_ab.py --which ab --volume path/to/volume.npz
 `validate_ibfe_frames` warns that `f` and traction are zero and that this is a
 public volume, not an IBFE oracle.
 
+Corrado 2000-step / 3-seed table:
+[`results/public_volume/CORRADO_OBSERVABILITY.md`](results/public_volume/CORRADO_OBSERVABILITY.md).
+Do not rerun that sweep unless the conversion or the windows change.
+
+Eulerian stasis (kinematic marker, **not** a thrombus solver) on the same NPZ:
+
+```bash
+python scripts/public_volume_stasis.py \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --out docs/results/public_volume/stasis_gt.json
+```
+
 ## What the numbers mean
 
 - **Primary metric: per-component / speed velocity relL2.** That is the

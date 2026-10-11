@@ -43,4 +43,5 @@ as the result; it is why the 2000-step / 3-seed run exists.
 - FSI helps (no `f`; baseline only).
 - Stasis / residence time / thrombus maps are trustworthy at this error.
   GT stasis on the same volume is 165 / 195 mL persistent at 10 cm/s
-  ([`STASIS_GT.md`](STASIS_GT.md)).
+  ([`STASIS_GT.md`](STASIS_GT.md)). Window count moves the 30 mL jet
+  only 23.7 → 26.2 mL ([`STASIS_RECON.md`](STASIS_RECON.md)).

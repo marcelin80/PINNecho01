@@ -1,29 +1,28 @@
 # Corrado — reconstruction vs GT stasis (10 cm/s)
 
-One baseline run, 2000 Adam + 50 L-BFGS, 3 windows, seed 0, on
-`day1_vipr_30min.npz`. Same clinical cut as [`STASIS_GT.md`](STASIS_GT.md).
-Not a thrombus. `vel_relL2_speed = 0.417` matches the observability
-windows=3 / seed=0 speed error.
+Same cut as [`STASIS_GT.md`](STASIS_GT.md). Baseline, 2000 Adam + 50 L-BFGS,
+seed 0, `day1_vipr_30min.npz`. Not a thrombus. Speed relL2 matches the
+observability seed-0 rows (1-window 0.516 vs ~0.51; 3-window 0.417 vs 0.418).
 
-| quantity | GT | PINN |
-|---|---|---|
-| persist stasis | 164.6 mL | 168.8 mL |
-| jet (cavity − persist) | **30.4 mL** | **26.2 mL** |
-| stasis frac (voxel × time) | 0.831 | 0.851 |
-| speed mean | 6.16 cm/s | 5.68 cm/s |
-| persist Dice | 0.967 | |
-| jet Dice (derived) | **≈ 0.80** | |
+| | GT | 1 window | 3 windows |
+|---|---|---|---|
+| persist stasis | 164.6 mL | 171.3 mL | 168.8 mL |
+| **jet** | **30.4 mL** | **23.7 mL (−22 %)** | **26.2 mL (−14 %)** |
+| persist Dice | | 0.959 | 0.967 |
+| **jet Dice** | | **0.748** | **≈ 0.80** |
+| stasis frac | 0.831 | 0.856 | 0.851 |
+| speed mean | 6.16 cm/s | 5.70 cm/s | 5.68 cm/s |
+| vel_relL2_speed | | 0.516 | 0.417 |
 
-`persist_stasis_dice = 0.967` is the majority class: 84 % of the cavity is
-already slow, so a slightly-too-slow reconstruction still looks like the
-stasis sea. The quantity that matters for the CHF motivation is the jet:
-it shrinks 30.4 → 26.2 mL (−14 %) and the moving-region Dice is ~0.80, not
-0.97.
+Extra windows recover **2.5 mL** of the jet and raise moving-region Dice
+0.75 → 0.80. That is the observability lever touching the CHF-relevant
+marker, modestly. Both reconstructions are slightly too slow (~5.7 cm/s)
+and still leak the 30 mL core. Persist Dice stays ~0.96 because 84 % of
+the cavity is already the stasis sea — do not quote it.
 
-That is compatible with speed relL2 0.42 (smoothing). It does **not** say
-the reconstructed field is good enough for residence-time or thrombus maps.
-It says the 10 cm/s persist map on this phantom is a coarse label that
-mostly survives, while the 30 mL through-flow core is already leaking.
+This is **not** enough for residence-time or thrombus maps. Layer 1
+window-contrast on the jet is closed. Do not rerun.
 
-Do not rerun unless the conversion or the windows change.
-`docs/results/public_volume/stasis_recon.json` on the laptop is the raw file.
+Laptop JSON: `stasis_recon_w1.json` (1 window), `stasis_recon.json` (3 windows).
+3-window `jet_dice` is derived from the same voxel-volume identity as
+`compare_volume_stasis`; the 1-window file has it natively.

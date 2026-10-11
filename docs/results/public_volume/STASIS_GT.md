@@ -36,5 +36,5 @@ python scripts/public_volume_stasis.py --train \
 ```
 
 Look at `jet_ml_true` (~30 mL) vs `jet_ml_pred` and `jet_dice`, not only
-`persist_stasis_dice`. One-seed result:
+`persist_stasis_dice`. 1- vs 3-window, seed 0:
 [`STASIS_RECON.md`](STASIS_RECON.md). It is not a thrombus.

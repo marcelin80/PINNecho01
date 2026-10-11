@@ -9,7 +9,8 @@ from pinnecho.config import Config
 from pinnecho.data import synthetic_public_volume_frames
 from pinnecho.data.ibfe_dataset import evaluate_ibfe, train_ibfe
 from pinnecho.eval.stasis import (
-    compare_point_stasis, resolve_speed_thresh, volume_stasis_report,
+    compare_point_stasis, compare_volume_stasis, resolve_speed_thresh,
+    volume_stasis_report,
 )
 
 
@@ -64,6 +65,33 @@ def test_scrambled_slow_fast_lowers_dice():
                          [0.40, 0.0, 0.0], [0.01, 0.0, 0.0]])
     m = compare_point_stasis(true, pred, speed_thresh=0.10)
     assert m["stasis_dice"] == 0.0
+
+
+def _split_cavity_volume():
+    t_len, n = 4, 8
+    vel = np.zeros((t_len, n, n, n, 3))
+    mask = np.zeros((n, n, n), dtype=bool)
+    mask[2:6, 2:6, 2:6] = True
+    vel[:, 2:4, 2:6, 2:6, 0] = 0.0
+    vel[:, 4:6, 2:6, 2:6, 0] = 0.40
+    return vel, mask
+
+
+def test_compare_volume_identical_is_perfect():
+    vel, mask = _split_cavity_volume()
+    m = compare_volume_stasis(vel, vel, mask, spacing=(0.002, 0.002, 0.002))
+    assert m["persist_stasis_dice"] == 1.0
+    assert m["jet_ml_true"] == m["jet_ml_pred"]
+    assert m["persist_stasis_ml_true"] == m["persist_stasis_ml_pred"]
+
+
+def test_compare_volume_zero_pred_eats_the_jet():
+    vel, mask = _split_cavity_volume()
+    m = compare_volume_stasis(
+        vel, np.zeros_like(vel), mask, spacing=(0.002, 0.002, 0.002))
+    assert m["jet_ml_pred"] == 0.0
+    assert m["persist_stasis_ml_pred"] > m["persist_stasis_ml_true"]
+    assert m["persist_stasis_dice"] < 1.0
 
 
 def test_evaluate_ibfe_includes_stasis_keys():

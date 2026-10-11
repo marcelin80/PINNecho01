@@ -25,11 +25,15 @@ This rigid through-flow phantom is already stasis-rich: most of the 195 mL
 cavity sits below 10 cm/s. The structure that a reconstruction must keep is
 the ~30 mL jet, not a healthy emptying LV. A PINN with speed relL2 ~ 0.42
 is expected to smear that jet and inflate persistent stasis toward the full
-cavity. That comparison is `--train` on
-`scripts/public_volume_stasis.py`; it is not a thrombus.
+cavity. Score that with one 2000-step / 3-window reconstruction (do not
+overwrite this GT JSON):
 
 ```bash
-python scripts/public_volume_stasis.py \
+python scripts/public_volume_stasis.py --train \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
-    --out docs/results/public_volume/stasis_gt.json
+    --steps 2000 --n-windows 3 --seed 0 \
+    --out docs/results/public_volume/stasis_recon.json
 ```
+
+Look at `persist_stasis_dice`, `jet_ml_true` (~30 mL) vs `jet_ml_pred`.
+It is not a thrombus.

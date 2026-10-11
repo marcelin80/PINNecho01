@@ -109,6 +109,10 @@ GT table (10 cm/s): [`results/public_volume/STASIS_GT.md`](results/public_volume
 python scripts/public_volume_stasis.py \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
     --out docs/results/public_volume/stasis_gt.json
+python scripts/public_volume_stasis.py --train \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --steps 2000 --n-windows 3 --seed 0 \
+    --out docs/results/public_volume/stasis_recon.json
 ```
 
 ## What the numbers mean

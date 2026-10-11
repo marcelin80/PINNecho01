@@ -115,7 +115,8 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 10 cm/s 나�
 2. **baseline vs `|v_beam|` oversample**, 같은 시드 3개, 컷 5/10/15 cm/s. 1창도 같은 시드로 쌍을 맞춘다. 가설을 검증하거나 기각한다.
 3. **`n_data × n_windows` 대조** 한 번. `w` 악화가 희석인지 가른다. 창 레버를 논문 주장으로 쓸 때만 필수.
 4. **그다음 Corrado 동결.** 이 팬텀에서 더 얻을 정보는 작다.
-5. **실 IBFE** — 움직이는 벽, 요소 반전 없는 굵은 격자 한 구간(gate R `dx = 0.94 mm`). 코라도 제트를 고치지 않는다.
+5. **다음 측정 볼륨: OSU Zenodo 12515230** (CC BY 4.0). 측정 3성분. 5단계 점검: [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md). Charité CFD는 만들지 않음. 문의 메일만: [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md).
+6. **실 IBFE**는 솔버 쪽이 준비되면. OSU가 질량보존/잡음 바닥에서 실패하고 Charité 4D-flow도 안 오면 그다음이다.
 
 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A→B→C를 돌리기 전에 GT 제트 `--fast-frac`을 돌리지 말 것.
 
@@ -125,10 +126,10 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 10 cm/s 나�
 
 - UK Biobank 20213은 참가자당 ~5 MB **2D PC**이지 4D-flow 공동이 아니다. 승인 접근.
 - Töger et al. (PLOS ONE 2018) 등 인체 4D-flow 논문은 윤리상 영상을 공유하지 않는다.
-- Zenodo [12515230](https://zenodo.org/records/12515230)은 자원봉사자 Cartesian 4D-flow 1건(OSU). FOV가 LV 공동인지·CHF인지는 미확인. 지금 받을 데이터가 아니다.
-- 2026 LV 생리 팬텀(Vellguth) figshare는 private.
+- Zenodo [12515230](https://zenodo.org/records/12515230) (OSU, CC BY 4.0): rest/stress **k-space**, 전심장+대동맥궁. LV 공동 여부는 재구성 후 확인. **다음 점검 대상.** 파일을 아직 열지 않음.
+- Charité / Vellguth figshare는 private. 논문의 지원자 LV 4D-flow(25 frame, 1.96×1.96×2.8 mm)는 미공개. CFD를 정답으로 쓰지 않음. 문의만.
 
-부전 LV에서 같은 질문을 보려면 그 데이터가 필요하고, 현재 공개 선반은 비어 있다. 다음 정보가 큰 쪽은 실 IBFE다.
+둘 다 피험자 1명 수준이라 사례 시연이다. 부전·확장 코호트는 여전히 없다.
 
 ---
 
@@ -158,4 +159,6 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 10 cm/s 나�
 | [`results/public_volume/STASIS_RECON.md`](results/public_volume/STASIS_RECON.md) | 1 vs 3 window 제트 |
 | [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md) | MRI vs PIV |
 | [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md) | 에코 슬랩 |
-| [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md) | `--fast-frac` 실험 |
+| [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md) | `|v_beam|` 실험 |
+| [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md) | 다음 측정 볼륨 5단계 게이트 |
+| [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (CFD 금지) |

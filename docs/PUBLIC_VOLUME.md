@@ -101,7 +101,9 @@ Corrado 2000-step / 3-seed table:
 [`results/public_volume/CORRADO_OBSERVABILITY.md`](results/public_volume/CORRADO_OBSERVABILITY.md).
 Do not rerun that sweep unless the conversion or the windows change.
 
-Eulerian stasis (kinematic marker, **not** a thrombus solver) on the same NPZ:
+Eulerian stasis (kinematic marker, **not** a thrombus solver) on the same NPZ.
+GT table (10 cm/s): [`results/public_volume/STASIS_GT.md`](results/public_volume/STASIS_GT.md)
+(195 mL cavity, 165 mL persistent stasis, ~30 mL moving jet).
 
 ```bash
 python scripts/public_volume_stasis.py \

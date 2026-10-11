@@ -42,3 +42,5 @@ as the result; it is why the 2000-step / 3-seed run exists.
 - The field is recovered (`speed` relL2 0.42, 3-window `v` 0.69).
 - FSI helps (no `f`; baseline only).
 - Stasis / residence time / thrombus maps are trustworthy at this error.
+  GT stasis on the same volume is 165 / 195 mL persistent at 10 cm/s
+  ([`STASIS_GT.md`](STASIS_GT.md)).

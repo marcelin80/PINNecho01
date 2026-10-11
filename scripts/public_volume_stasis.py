@@ -22,12 +22,24 @@ MRI vs registered PIV (same grid, overlap mask, fixed 10 cm/s; no train)::
         --speed-thresh 0.10 \\
         --out docs/results/public_volume/stasis_mri_vs_piv.json
 
-Speed-stratified jet-preserve train (one lever; same 2000 / 3 windows / seed 0)::
+Paired 3-seed baseline vs |v_beam| oversample (observable; not the GT jet)::
 
     PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \\
         --volume data/corrado_lv_phantom/day1_vipr_30min.npz \\
-        --steps 2000 --n-windows 3 --seed 0 --fast-frac 0.5 \\
-        --out docs/results/public_volume/stasis_recon_fastfrac.json
+        --steps 2000 --n-windows 3 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \\
+        --out docs/results/public_volume/stasis_recon_seeds.json
+    PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \\
+        --volume data/corrado_lv_phantom/day1_vipr_30min.npz \\
+        --steps 2000 --n-windows 3 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \\
+        --fast-frac 0.5 \\
+        --out docs/results/public_volume/stasis_recon_fastfrac_seeds.json
+
+Window-count control with n_data scaled by windows (dilution vs trade-off)::
+
+    PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \\
+        --volume data/corrado_lv_phantom/day1_vipr_30min.npz \\
+        --steps 2000 --n-windows 3 --seeds 0 1 2 --scale-n-data-with-windows \\
+        --out docs/results/public_volume/stasis_recon_w3_ndata.json
 """
 
 import _bootstrap  # noqa: F401
@@ -65,9 +77,17 @@ def main() -> None:
     ap.add_argument("--n-fluid", type=int, default=2000)
     ap.add_argument("--n-wall", type=int, default=500)
     ap.add_argument("--fast-frac", type=float, default=None,
-                    help="fraction of fluid samples from voxels >= speed-thresh. "
-                         "None = uniform (the leaky baseline).")
-    ap.add_argument("--seed", type=int, default=0)
+                    help="Doppler-batch fraction from |v_beam| >= --fast-thresh. "
+                         "Observable only; not the GT 3-component jet.")
+    ap.add_argument("--fast-thresh", type=float, default=0.10,
+                    help="|v_beam| cut in m/s for --fast-frac (default 0.10).")
+    ap.add_argument("--n-data", type=int, default=3072)
+    ap.add_argument("--scale-n-data-with-windows", action="store_true",
+                    help="set n_data = --n-data * n_windows (per-window budget).")
+    ap.add_argument("--cuts", type=float, nargs="+", default=[0.05, 0.10, 0.15],
+                    help="absolute stasis cuts (m/s) scored on the same vel_pred.")
+    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--seeds", type=int, nargs="+", default=None)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -117,44 +137,72 @@ def main() -> None:
 
     if args.train:
         torch.set_default_dtype(torch.float32)
-        frames = load_ibfe_output(
-            args.volume, n_fluid=args.n_fluid, n_wall=args.n_wall,
-            seed=args.seed, fast_frac=args.fast_frac,
-            fast_thresh=args.speed_thresh)
-        speed = frames.velocity_fluid.norm(dim=1)
-        sample_fast = float((speed >= args.speed_thresh).float().mean())
-        print(f"fluid sample fast_frac={args.fast_frac} "
-              f"observed={sample_fast:.3f} n={speed.numel()}")
-        transducers = default_windows_from_frames(
-            frames, n_windows=args.n_windows)
-        model, point = train_ibfe(
-            frames, backbone="baseline", steps=args.steps,
-            lbfgs_iters=args.lbfgs_iters, seed=args.seed,
-            use_traction=False, transducers=transducers, verbose=True)
-        vel_pred = predict_volume_velocity(
-            model, arrays["origin"], arrays["spacing"], arrays["times"],
-            arrays["velocity"].shape[1:4])
-        vol = compare_volume_stasis(
-            arrays["velocity"], vel_pred, arrays["mask"], arrays["spacing"],
-            speed_thresh=args.speed_thresh, persist_frac=args.persist_frac,
-            rho=arrays["rho"])
+        if args.seeds:
+            seeds = tuple(int(s) for s in args.seeds)
+        elif args.seed is not None:
+            seeds = (int(args.seed),)
+        else:
+            seeds = (0,)
+        n_data = int(args.n_data)
+        if args.scale_n_data_with_windows:
+            n_data = n_data * int(args.n_windows)
+        cuts = [float(c) for c in args.cuts]
+        records = []
+        for seed in seeds:
+            frames = load_ibfe_output(
+                args.volume, n_fluid=args.n_fluid, n_wall=args.n_wall,
+                seed=seed)
+            transducers = default_windows_from_frames(
+                frames, n_windows=args.n_windows)
+            print(f"[train] seed={seed} windows={args.n_windows} "
+                  f"n_data={n_data} data_fast_frac={args.fast_frac} "
+                  f"(on |v_beam|, not GT |u|)")
+            model, point = train_ibfe(
+                frames, backbone="baseline", steps=args.steps,
+                lbfgs_iters=args.lbfgs_iters, seed=seed,
+                use_traction=False, transducers=transducers, verbose=True,
+                n_data=n_data, data_fast_frac=args.fast_frac,
+                data_fast_thresh=args.fast_thresh)
+            vel_pred = predict_volume_velocity(
+                model, arrays["origin"], arrays["spacing"], arrays["times"],
+                arrays["velocity"].shape[1:4])
+            by_cut = {}
+            print(f"volume vs GT (seed={seed}; cuts {cuts})")
+            for cut in cuts:
+                vol = compare_volume_stasis(
+                    arrays["velocity"], vel_pred, arrays["mask"],
+                    arrays["spacing"], speed_thresh=cut,
+                    persist_frac=args.persist_frac, rho=arrays["rho"],
+                    absolute=True)
+                by_cut[f"{cut:.2f}"] = vol
+                print(f"  cut={cut:.2f} jet {vol['jet_ml_true']:.2f}→"
+                      f"{vol['jet_ml_pred']:.2f} dice={vol['jet_dice']:.3f}")
+            print(f"  vel_relL2_speed {point.get('vel_relL2_speed', float('nan'))}")
+            rec = {
+                "seed": seed,
+                "n_windows": int(args.n_windows),
+                "n_data": n_data,
+                "data_fast_frac": args.fast_frac,
+                "data_fast_source": "abs_v_beam",
+                "point": {k: float(v) for k, v in point.items()
+                          if isinstance(v, (int, float, np.floating))},
+                "volume_by_cut": by_cut,
+            }
+            records.append(rec)
         result["which"] = "stasis_gt_and_recon"
         result["n_windows"] = int(args.n_windows)
         result["steps"] = int(args.steps)
-        result["seed"] = int(args.seed)
-        result["fast_frac"] = args.fast_frac
-        result["sample_fast_frac"] = sample_fast
-        result["point"] = {k: float(v) for k, v in point.items()
-                           if isinstance(v, (int, float, np.floating))}
-        result["volume"] = vol
-        print("volume reconstruction vs GT stasis (same cut)")
-        for k in ("persist_stasis_ml_true", "persist_stasis_ml_pred",
-                  "jet_ml_true", "jet_ml_pred", "persist_stasis_dice",
-                  "jet_dice",
-                  "stasis_frac_true", "stasis_frac_pred",
-                  "speed_mean_true", "speed_mean_pred"):
-            print(f"  {k:26s} {vol[k]}")
-        print(f"  vel_relL2_speed           {point.get('vel_relL2_speed', float('nan'))}")
+        result["seeds"] = list(seeds)
+        result["cuts"] = cuts
+        result["n_data"] = n_data
+        result["scale_n_data_with_windows"] = bool(args.scale_n_data_with_windows)
+        result["data_fast_frac"] = args.fast_frac
+        result["data_fast_source"] = "abs_v_beam"
+        result["records"] = records
+        if len(records) == 1:
+            result["point"] = records[0]["point"]
+            result["volume"] = records[0]["volume_by_cut"].get("0.10") or next(
+                iter(records[0]["volume_by_cut"].values()))
 
     out = Path(args.out or (
         "docs/results/public_volume/stasis_recon.json" if args.train

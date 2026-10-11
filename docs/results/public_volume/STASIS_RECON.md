@@ -15,10 +15,12 @@ observability seed-0 rows (1-window 0.516 vs ~0.51; 3-window 0.417 vs 0.418).
 | vel_relL2_speed | | 0.516 | 0.417 |
 
 Extra windows recover **2.5 mL** of the jet and raise moving-region Dice
-0.75 → 0.80. That is the observability lever touching the CHF-relevant
-marker, modestly. Both reconstructions are slightly too slow (~5.7 cm/s)
-and still leak the 30 mL core. Persist Dice stays ~0.96 because 84 % of
-the cavity is already the stasis sea — do not quote it.
+0.75 → 0.80 **on seed 0 only**. Treat “windows protect the jet a little”
+as a hypothesis until a 3-seed paired table exists
+([`JET_PRESERVE.md`](JET_PRESERVE.md)). Both reconstructions are slightly
+too slow (~5.7 cm/s) and still leak the 30 mL core. Persist Dice stays
+~0.96 because 84 % of the cavity is already the stasis sea — do not quote
+it. Jet mL is the 10 cm/s remainder; check 5/10/15 cm/s on the next runs.
 
 This is **not** enough for residence-time or thrombus maps. Layer 1
 window-contrast on the jet is closed. Registered PIV does not referee

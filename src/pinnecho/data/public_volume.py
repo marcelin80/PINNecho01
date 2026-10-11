@@ -86,10 +86,11 @@ def frames_from_public_volume(
     zero unless ``pressure`` is given. ``n_fluid`` / ``n_wall`` cap the *total*
     point counts (evenly across frames) so a fine 4D-flow grid stays tractable.
 
-    ``fast_frac`` (0–1) reserves that share of each frame's fluid samples for
-    voxels with speed ``>= fast_thresh`` (default 10 cm/s). Uniform
-    ``rng.choice`` undersamples the through-flow jet on a stasis-rich cavity
-    (Corrado: ~16 % of voxels). ``None`` keeps the old uniform cap.
+    ``fast_frac`` here is an **oracle** draw on GT ``|u|`` (the 3-component
+    jet). Do not use it as the jet-preserve experiment — that tells the
+    trainer where the jet is. The deliverable lever is
+    ``data_fast_frac`` on ``|v_beam|`` in :func:`make_ibfe_batch_builder`.
+    ``None`` keeps the uniform cap.
     """
     velocity = np.asarray(velocity, dtype=np.float64)
     if velocity.ndim != 5 or velocity.shape[-1] != 3:

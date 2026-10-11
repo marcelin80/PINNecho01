@@ -1,26 +1,56 @@
-# Corrado — how to keep the 30 mL jet (sampling lever)
+# Corrado — jet-preserve lever (observable `|v_beam|` only)
 
-The 3-window PINN still loses 4 mL of jet (30.4 → 26.2 mL) at speed relL2
-0.42. That is not an IBFE problem. The cavity is 84 % persistent stasis, and
-`frames_from_public_volume` drew **uniform** fluid points (`n_fluid=2000` /
-20 frames ≈ 100 / frame → ~16 jet points). The beam data loss is a global
-mean, so the stasis sea dominates the count.
+The first `--fast-frac` draft stratified **GT 3-component speed**. That
+tells the trainer where the 10 cm/s jet is and is the same class of
+circularity as feeding oracle `f`. **Do not run that version.**
 
-End-of-train 3-window weights: `10*data + 1*pde + 10*bc` ≈ 1.37 + 0.19 +
-1.82. PDE is ~6 % of the total. Down-weighting PDE is the second knob, not
-the first. Windows already bought +2.5 mL (1 → 3). Change **one** lever.
+The deliverable lever oversamples the Doppler *data* batch on
+`|v_beam| >= fast_thresh` (the scalar the PINN is trained on). Fluid
+collocation stays uniform. Fluid point clouds stay uniform
+(`frames_from_public_volume(..., fast_frac=None)`).
 
-`--fast-frac 0.5` reserves half of each frame's fluid samples for voxels
-with speed ≥ 10 cm/s. Same 2000 steps, 3 windows, seed 0. Look at
-`jet_ml_pred` and `jet_dice` vs 26.2 mL / ≈0.80. `sample_fast_frac` on
-the console should be ~0.5, not ~0.16.
+`--fast-frac` on `scripts/public_volume_stasis.py` now means `|v_beam|`.
+
+The 1-window 23.7 mL vs 3-window 26.2 mL contrast is **one seed**. Treat
+“windows protect the jet a little” as a **hypothesis** until a 3-seed
+paired comparison exists. Score the same `vel_pred` at 5 / 10 / 15 cm/s
+(`--cuts`). Jet millilitres are a threshold remainder, not a physical
+object.
+
+`w` relL2 rose with window count (0.260 → 0.356). That may be dilution
+(fixed `n_data`, larger pool) or an optimisation trade-off. One control:
+`--scale-n-data-with-windows` (`n_data *= n_windows`).
+
+Protocol (do not overwrite `stasis_recon.json`):
 
 ```bash
+# A. baseline, 3 seeds, 3 cuts  — pair against B
 PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
-    --steps 2000 --n-windows 3 --seed 0 --fast-frac 0.5 \
-    --out docs/results/public_volume/stasis_recon_fastfrac.json
+    --steps 2000 --n-windows 3 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \
+    --out docs/results/public_volume/stasis_recon_w3_seeds.json
+
+# B. |v_beam| oversample, same seeds / windows / cuts
+PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --steps 2000 --n-windows 3 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \
+    --fast-frac 0.5 \
+    --out docs/results/public_volume/stasis_recon_fastfrac_seeds.json
+
+# C. optional: 1-window, same seeds / cuts (paired window hypothesis)
+PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --steps 2000 --n-windows 1 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \
+    --out docs/results/public_volume/stasis_recon_w1_seeds.json
+
+# D. optional: n_data × windows (dilution control), 3 windows
+PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
+    --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
+    --steps 2000 --n-windows 3 --seeds 0 1 2 --scale-n-data-with-windows \
+    --cuts 0.05 0.10 0.15 \
+    --out docs/results/public_volume/stasis_recon_w3_ndata.json
 ```
 
-Do not combine with a PDE-weight change. Do not overwrite
-`stasis_recon.json`. Not a thrombus.
+Compare seed-wise: `jet_ml_pred` / `jet_dice` at each cut, and `vel_relL2_w`.
+After A–C (D if claiming the window lever in a paper), **freeze Corrado**.
+Not a thrombus.

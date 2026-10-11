@@ -15,7 +15,10 @@ from pinnecho.data import (
     synthetic_public_volume_frames,
     validate_ibfe_frames,
 )
-from pinnecho.data.ibfe_dataset import train_ibfe
+from pinnecho.data.ibfe_dataset import (
+    _stratified_randint, build_doppler_from_frames,
+    default_windows_from_frames, make_ibfe_batch_builder, train_ibfe,
+)
 from pinnecho.data.public_volume import (
     frames_from_public_volume, rasterize_synthetic_lv_3d,
 )
@@ -128,7 +131,33 @@ def test_public_volume_observability_sweep_smoke():
         assert math.isnan(r["pressure_relL2_mean"])
 
 
-def test_fast_frac_oversamples_the_jet():
+def test_stratified_randint_respects_fast_frac():
+    mask = torch.zeros(1000, dtype=torch.bool)
+    mask[:200] = True
+    g = torch.Generator().manual_seed(0)
+    idx = _stratified_randint(200, mask, g, 0.5)
+    assert idx.numel() == 200
+    assert float(mask[idx].float().mean()) == pytest.approx(0.5, abs=1e-6)
+
+
+def test_data_fast_frac_oversamples_abs_v_beam():
+    frames = synthetic_public_volume_frames(
+        Config(), nx=10, ny=10, nz=12, n_frames=2, n_fluid=400, n_wall=80)
+    transducers = default_windows_from_frames(frames, n_windows=1)
+    _, _, vb = build_doppler_from_frames(
+        frames, transducers, noise_level=0.0, seed=0)
+    thresh = float(vb.abs().quantile(0.8))
+    pool = float((vb.abs() >= thresh).float().mean())
+    build = make_ibfe_batch_builder(
+        frames, transducers=transducers, n_data=80, noise_level=0.0,
+        data_fast_frac=0.5, data_fast_thresh=thresh, seed=0)
+    hits = [float((build(i)["data"]["v_beam"].abs() >= thresh).float().mean())
+            for i in range(15)]
+    assert float(np.mean(hits)) > pool
+    assert float(np.mean(hits)) == pytest.approx(0.5, abs=0.12)
+
+
+def test_oracle_gt_speed_cap_still_works():
     t_len, n = 2, 10
     vel = np.zeros((t_len, n, n, n, 3))
     mask = np.ones((n, n, n), dtype=bool)

@@ -25,6 +25,13 @@ def test_resolve_thresh_shrinks_on_slow_toy_fields():
     assert t == 0.25 * np.quantile(speed, 0.99)
 
 
+def test_resolve_thresh_clinical_on_corrado_like_p99():
+    # p99 = 26 cm/s (measured Corrado interior) must keep 10 cm/s,
+    # not drop to 0.25*p99 ≈ 6.5 cm/s.
+    speed = np.linspace(0.0, 0.26, 10_000)
+    assert resolve_speed_thresh(speed, speed_thresh=0.10) == 0.10
+
+
 def test_volume_stasis_fraction_on_split_cavity():
     t_len, n = 4, 8
     vel = np.zeros((t_len, n, n, n, 3))

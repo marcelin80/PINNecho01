@@ -33,7 +33,12 @@ def resolve_speed_thresh(speed: np.ndarray, *,
     if interior.size == 0:
         return float(speed_thresh)
     p99 = float(np.quantile(interior, 0.99))
-    return float(min(speed_thresh, rel_p99 * max(p99, 1e-12)))
+    # Real 4D-flow (p99 at or above the clinical cut): use 10 cm/s.
+    # Slow manufactured toys (p99 << 10 cm/s): a relative cut, else every voxel
+    # would be "stasis".
+    if p99 >= speed_thresh:
+        return float(speed_thresh)
+    return float(rel_p99 * max(p99, 1e-12))
 
 
 def _interior_speed(velocity: np.ndarray, mask: np.ndarray) -> np.ndarray:

@@ -3,6 +3,7 @@
 import math
 
 import numpy as np
+import pytest
 import torch
 
 from pinnecho.config import Config
@@ -125,6 +126,38 @@ def test_public_volume_observability_sweep_smoke():
     for r in res["records"]:
         assert math.isfinite(r["vel_relL2_u_mean"])
         assert math.isnan(r["pressure_relL2_mean"])
+
+
+def test_fast_frac_oversamples_the_jet():
+    t_len, n = 2, 10
+    vel = np.zeros((t_len, n, n, n, 3))
+    mask = np.ones((n, n, n), dtype=bool)
+    vel[:, :2, :, :, 0] = 0.40  # 20 % of the cube is fast
+    kwargs = dict(
+        spacing=(0.002, 0.002, 0.002), origin=(0, 0, 0),
+        times=(0.0, 0.3), n_fluid=200, n_wall=40, seed=0)
+    uniform = frames_from_public_volume(vel, mask, **kwargs)
+    strat = frames_from_public_volume(
+        vel, mask, fast_frac=0.5, fast_thresh=0.10, **kwargs)
+    u = float((uniform.velocity_fluid.norm(dim=1) >= 0.10).float().mean())
+    s = float((strat.velocity_fluid.norm(dim=1) >= 0.10).float().mean())
+    assert u == pytest.approx(0.20, abs=0.08)
+    assert s == pytest.approx(0.50, abs=0.08)
+    assert s > u
+
+
+def test_fast_frac_none_matches_uniform_cap():
+    t_len, n = 2, 8
+    vel = np.zeros((t_len, n, n, n, 3))
+    mask = np.ones((n, n, n), dtype=bool)
+    vel[:, :2, :, :, 0] = 0.40
+    a = frames_from_public_volume(
+        vel, mask, spacing=(0.002, 0.002, 0.002), origin=(0, 0, 0),
+        times=(0.0, 0.3), n_fluid=80, n_wall=20, seed=1)
+    b = frames_from_public_volume(
+        vel, mask, spacing=(0.002, 0.002, 0.002), origin=(0, 0, 0),
+        times=(0.0, 0.3), n_fluid=80, n_wall=20, seed=1, fast_frac=None)
+    assert torch.equal(a.coords_fluid, b.coords_fluid)
 
 
 def test_empty_mask_raises():

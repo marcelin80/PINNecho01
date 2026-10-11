@@ -111,6 +111,8 @@ MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_vo
 Echo-plane slabs vs that jet (no train):
 [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md)
 (A4C 22.3 / 30.4 mL at the fat 0.12 AABB slab; PLAX = A4C).
+Jet-preserve sampling lever:
+[`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md).
 
 ```bash
 python scripts/public_volume_stasis.py \

@@ -21,6 +21,13 @@ MRI vs registered PIV (same grid, overlap mask, fixed 10 cm/s; no train)::
         --other data/corrado_lv_phantom/day1_piv_avg.npz \\
         --speed-thresh 0.10 \\
         --out docs/results/public_volume/stasis_mri_vs_piv.json
+
+Speed-stratified jet-preserve train (one lever; same 2000 / 3 windows / seed 0)::
+
+    PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \\
+        --volume data/corrado_lv_phantom/day1_vipr_30min.npz \\
+        --steps 2000 --n-windows 3 --seed 0 --fast-frac 0.5 \\
+        --out docs/results/public_volume/stasis_recon_fastfrac.json
 """
 
 import _bootstrap  # noqa: F401
@@ -57,6 +64,9 @@ def main() -> None:
     ap.add_argument("--n-windows", type=int, default=3)
     ap.add_argument("--n-fluid", type=int, default=2000)
     ap.add_argument("--n-wall", type=int, default=500)
+    ap.add_argument("--fast-frac", type=float, default=None,
+                    help="fraction of fluid samples from voxels >= speed-thresh. "
+                         "None = uniform (the leaky baseline).")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
@@ -108,7 +118,13 @@ def main() -> None:
     if args.train:
         torch.set_default_dtype(torch.float32)
         frames = load_ibfe_output(
-            args.volume, n_fluid=args.n_fluid, n_wall=args.n_wall)
+            args.volume, n_fluid=args.n_fluid, n_wall=args.n_wall,
+            seed=args.seed, fast_frac=args.fast_frac,
+            fast_thresh=args.speed_thresh)
+        speed = frames.velocity_fluid.norm(dim=1)
+        sample_fast = float((speed >= args.speed_thresh).float().mean())
+        print(f"fluid sample fast_frac={args.fast_frac} "
+              f"observed={sample_fast:.3f} n={speed.numel()}")
         transducers = default_windows_from_frames(
             frames, n_windows=args.n_windows)
         model, point = train_ibfe(
@@ -126,6 +142,8 @@ def main() -> None:
         result["n_windows"] = int(args.n_windows)
         result["steps"] = int(args.steps)
         result["seed"] = int(args.seed)
+        result["fast_frac"] = args.fast_frac
+        result["sample_fast_frac"] = sample_fast
         result["point"] = {k: float(v) for k, v in point.items()
                            if isinstance(v, (int, float, np.floating))}
         result["volume"] = vol

@@ -4,7 +4,12 @@ A protocol. Uniform fluid sampling. `data_fast_frac=None` (`|v_beam|` not
 used). 2000 Adam + 50 L-BFGS, 3 windows, seeds 0/1/2. Same
 `day1_vipr_30min.npz`. Not a thrombus. Do not rerun.
 
-Laptop JSON: `stasis_recon_w3_seeds.json`.
+Laptop JSON: `stasis_recon_w3_seeds.json`. A did **not** write
+`*_peaks.npz`; do not rerun A to get them. Peak-ratio and blur-GT are
+no-retrain checks on B / a blurred GT.
+
+Jet = above the cut for **> 50 % of the cycle** (`cavity & ~persist`),
+not “ever exceeded.”
 
 GT remainder (cavity − persist) depends on the cut:
 
@@ -21,16 +26,30 @@ GT remainder (cavity − persist) depends on the cut:
 | 2 | 0.414 | 73.11 / 0.844 | 25.39 / 0.818 | 5.58 / 0.525 |
 | mean | 0.431 | 73.2 / 0.838 | **25.3 / 0.807** | **6.3 / 0.561** |
 
+Signed relative jet-volume error `(pred − GT) / GT`:
+
+| cut | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| 5 cm/s | −10 % | −7 % | −8 % |
+| 10 cm/s | −14 % | −20 % | −16 % |
+| 15 cm/s | −26 % | −51 % | −48 % |
+
 Seed 0 at 10 cm/s matches the earlier one-seed row (26.2 mL, Dice ≈ 0.80).
 Across seeds the 10 cm/s jet is **24.2–26.2 mL** (always a 4–6 mL leak).
 That leak is not a one-seed accident.
 
-The 15 cm/s core (10.8 mL GT) is the quantity that actually fails:
-Dice 0.53–0.63, and seeds 1–2 keep only ~5.4 mL. The 5 cm/s remainder
-looks better (Dice ~0.84) because it is a large, slow-ish set — the same
-majority-class effect as persist Dice. Do not quote 5 cm/s as “the jet
-is recovered.”
+The 15 cm/s core (10.8 mL GT, ~1350 voxels at 2 mm) is the quantity that
+actually fails: Dice 0.53–0.63, and seeds 1–2 keep only ~5.4 mL. The
+5 cm/s remainder looks better (Dice ~0.84) because it is a large,
+slow-ish set — the same majority-class effect as persist Dice. Do not
+quote 5 cm/s as “the jet is recovered.”
+
+Error growing with the cut is compatible with a constant peak-speed
+underestimate (tail clips first). That ratio is not in this file; B
+saves `*_peaks.npz` so it can be checked without a retrain.
 
 This table is **3-window only**. The 1- vs 3-window +2.5 mL contrast is
 still seed 0. Do not claim windows protect the jet until the 1-window
-3-seed pair exists. `|v_beam|` oversample (B) is not in this file.
+3-seed pair (C) exists. `|v_beam|` oversample (B) is not in this file.
+Adopt/reject for B is pre-registered in
+[`JET_PRESERVE.md`](JET_PRESERVE.md).

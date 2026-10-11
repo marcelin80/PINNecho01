@@ -89,7 +89,8 @@ def frames_from_public_volume(
     ``fast_frac`` here is an **oracle** draw on GT ``|u|`` (the 3-component
     jet). Do not use it as the jet-preserve experiment — that tells the
     trainer where the jet is. The deliverable lever is
-    ``data_fast_frac`` on ``|v_beam|`` in :func:`make_ibfe_batch_builder`.
+    ``data_fast_frac`` on a per-frame ``|v_beam|`` quantile in
+    :func:`make_ibfe_batch_builder` (not a 5/10/15 cm/s cut).
     ``None`` keeps the uniform cap.
     """
     velocity = np.asarray(velocity, dtype=np.float64)

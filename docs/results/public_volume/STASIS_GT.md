@@ -5,7 +5,9 @@ Kinematic marker on the **measured** 4D-flow field
 coagulation model. Day 1 / PC VIPR / 30 min.
 
 Clinical cut: cavity voxel speed `< 0.10 m/s`. Persistent = below that cut
-for ≥ 50 % of the 20-frame cycle.
+for ≥ 50 % of the 20-frame cycle. The jet remainder is voxels **above**
+the cut for **more than half** the cycle — not voxels that exceeded the
+cut once.
 
 | quantity | value |
 |---|---|

@@ -4,9 +4,10 @@ Corrado A/B/C/blur are **closed**. Do not rerun them. This file locks the
 reject rules **before** the laptop CORe recon exists. Do not move them
 after seeing millilitres.
 
-monk (2026-10-12): Linux PATH has no `matlab`. That is **not** a Charité
-trigger. Run CORe on Windows MATLAB ≥ 2019, copy `*_core.mat` to monk.
-Do not install a second Linux MATLAB for this. Do not rewrite CORe.
+Windows CORe (2026-10-12): `rest4d`, `recon=["core"]`, `use_gpu=0`,
+4 encodings, **16.10 min**, acceleration 31.47. Background-phase
+`maps.jpg` is **not** an LV jet. Copy `rest4d_*_core.mat` to monk and
+pack without `--mask`. Do not move these reject rules.
 
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet
 (Arshad et al., *Magn Reson Med* 2024; dataset #11). Aao peak ~180 cm/s

@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-12 · 브랜치 `cursor/osu-failcheap-gate-935e` · Corrado 동결, OSU fail-cheap 잠금
+> 2026-10-12 · 브랜치 `cursor/osu-failcheap-gate-935e` · Corrado 동결, monk에 MATLAB 없음, Charité 문의
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -35,7 +35,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
-| OSU rest 4D-flow (#11) | **게이트 잠금** | k-space 807 MB. MATLAB CORe. VENC 200 cm/s. fail-cheap 3항목은 재구성 전에 고정. |
+| OSU rest 4D-flow (#11) | **MATLAB 차단** | monk에서 `command -v matlab` 비어 있음. k-space는 받지 말 것. CORe를 파이썬으로 다시 짜지 말 것. fail-cheap 3항목은 이미 잠김. |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---
@@ -129,8 +129,8 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 ## 5. 지금 열린 일 (우선순위)
 
 1. **Corrado는 동결.** A/B/C/블러/D(창을 논문에 안 쓰면) 다시 돌리지 말 것.
-2. **지금: OSU fail-cheap.** MATLAB≥2019가 없으면 멈춘다. CORe를 파이썬으로 다시 짜지 말 것. 재구성 후 `convert_osu_core` → QA에서 LV·Aao를 그리고 `osu_failcheap_gate`. 기준은 미리 잠갔다 ([`OSU_GATE.md`](results/public_volume/OSU_GATE.md)): LV p99≥10 cm/s, Aao SV가 93.6 mL/beat의 ±40%, 10 cm/s 나머지의 ≥50%가 LV(대동맥/LVOT <50%). PASS 전에는 학습하지 말 것.
-3. **Charité는 문의만** (OSU 재구성을 시작했거나 게이트가 FAIL인 뒤). CFD 금지.
+2. **지금: Charité 문의만.** monk에 MATLAB이 없다. OSU k-space는 재구성할 수 없고, 공개 재구성 볼륨도 없다. 메일은 [`CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md). CFD 금지.
+3. **OSU는 MATLAB이 생긴 뒤에만.** PATH 밖 설치는 `scripts/osu_matlab_check.sh`. 찾아도 되고 설치해도 된다. 없으면 807 MB를 받지 말 것. fail-cheap 기준은 [`OSU_GATE.md`](results/public_volume/OSU_GATE.md)에 잠겨 있다.
 4. **혈전 솔버는 아직 아님.**
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
@@ -141,7 +141,7 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 
 - UK Biobank 20213은 참가자당 ~5 MB **2D PC**이지 4D-flow 공동이 아니다. 승인 접근.
 - Töger et al. (PLOS ONE 2018) 등 인체 4D-flow 논문은 윤리상 영상을 공유하지 않는다.
-- Zenodo [12515230](https://zenodo.org/records/12515230) (OSU, CC BY 4.0): rest **dataset #11** (환자, VENC 200 cm/s). k-space. **지금 여는 파일.** MATLAB CORe 필요.
+- Zenodo [12515230](https://zenodo.org/records/12515230) (OSU, CC BY 4.0): rest **dataset #11** (환자, VENC 200 cm/s). k-space만. MATLAB 없으면 받지 말 것.
 - Charité / Vellguth figshare는 private. 논문의 지원자 LV 4D-flow(25 frame, 1.96×1.96×2.8 mm)는 미공개. CFD를 정답으로 쓰지 않음. 문의만.
 
 둘 다 피험자 1명 수준이라 사례 시연이다. 부전·확장 코호트는 여전히 없다.
@@ -183,5 +183,5 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md) | 에코 슬랩 |
 | [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md) | `|v_beam|` 실험 |
 | [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md) | OSU dataset #11 노트북 절차 |
-| [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 3항목 (지금, 숫자 잠금) |
-| [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (CFD 금지) |
+| [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 3항목 (숫자 잠금, MATLAB 대기) |
+| [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (지금, CFD 금지) |

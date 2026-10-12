@@ -7,8 +7,8 @@ is not stated. Volunteer LV 4D-flow in the paper: 25 frames,
 1.96×1.96×2.8 mm — not posted. Their CFD vs MRI aortic-valve ΔP was
 7.3 vs 1.6 mmHg; do not take the simulation as GT.
 
-Send this after OSU rest recon is started (or in parallel). Do not start
-Fluent / STAR-CCM+ / LDDMM.
+Send this **now**. OSU rest #11 is k-space only; monk has no MATLAB, so
+CORe cannot run. Do not start Fluent / STAR-CCM+ / LDDMM.
 
 To: katharina.vellguth@dhzc-charite.de
 Cc: moritz.wiegand@dhzc-charite.de

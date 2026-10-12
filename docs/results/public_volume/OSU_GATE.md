@@ -4,6 +4,9 @@ Corrado A/B/C/blur are **closed**. Do not rerun them. This file locks the
 reject rules **before** the laptop CORe recon exists. Do not move them
 after seeing millilitres.
 
+monk (2026-10-12): `command -v matlab` empty. Gate not scored. Do not
+curl k-space. Send [`CHARITE_INQUIRY.md`](../../data/CHARITE_INQUIRY.md).
+
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet
 (Arshad et al., *Magn Reson Med* 2024; dataset #11). Aao peak ~180 cm/s
 and ref stroke volume **93.6 mL/beat**. Whole-heart `speed_p99` will

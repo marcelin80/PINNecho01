@@ -24,13 +24,20 @@ does not mean the LV has a usable jet.
 
 ## Laptop step 1 — MATLAB check, then download + clone
 
-```bash
-# stop here if this prints nothing
-command -v matlab || echo "NO MATLAB — do not rewrite CORe"
+monk (2026-10-12): `command -v matlab` was empty. That is a **stop**,
+not a reason to rewrite CORe. Hunt off-PATH before declaring none.
+If still empty, **do not curl** the 807 MB k-space; send
+[`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md).
 
+```bash
+# stop here if this exits 2 — do not continue to curl
+bash scripts/osu_matlab_check.sh
+```
+
+Only if that printed a `MATLAB` path:
+
+```bash
 cd ~/PINNecho01
-git checkout cursor/osu-failcheap-gate-935e
-git pull
 mkdir -p data/osu_4dflow
 cd data/osu_4dflow
 

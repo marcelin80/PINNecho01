@@ -57,3 +57,20 @@ PYTHONPATH=src python3 scripts/osu_failcheap_gate.py \
 
 Do not overwrite Corrado JSON. Do not `--train` until this file records
 PASS.
+
+## Placeholder pack (2026-10-12, no LV mask)
+
+`rest4d_core.mat` → `rest_wholeheart.npz`. VENC 2.00 m/s.
+
+| | |
+|---|---|
+| velocity | `(20, 77, 96, 72, 3)` m/s |
+| spacing | 2.3 × 2.3 × 2.7 mm |
+| `mask_is_lv` | False |
+| verdict | **PENDING** (all three) |
+| placeholder `speed_p99` | **0.3529 m/s** (35 cm/s) |
+| whole-heart 10 cm/s remainder | **469.85 mL** — not an LV jet |
+
+Paper Aao peak is ~180 cm/s. Whole-heart p99 is not that number. Do not
+fail or adopt from this row. Next is LV + thin Aao masks, then
+`osu_failcheap_gate`.

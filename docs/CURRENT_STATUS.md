@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-12 · 브랜치 `cursor/osu-failcheap-gate-935e` · Corrado 동결, 윈도우 CORe 16.1 min 완료, 팩은 monk
+> 2026-10-12 · 브랜치 `cursor/osu-failcheap-gate-935e` · Corrado 동결, OSU 팩 PENDING, LV·Aao 마스크 대기
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -35,7 +35,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
-| OSU rest 4D-flow (#11) | **CORe 완료** | 윈도우 CPU, `rest4d`, core only, 4 enc, 16.10 min, R=31.5. maps.jpg는 배경위상 QA이지 LV 제트가 아님. `*_core.mat`를 monk로. |
+| OSU rest 4D-flow (#11) | **팩 PENDING** | (20,77,96,72,3), 2.3×2.3×2.7 mm. placeholder p99 0.353 m/s, 10 cm/s 나머지 470 mL(전심장, LV 아님). LV·Aao 마스크 다음. |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---
@@ -129,7 +129,7 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 ## 5. 지금 열린 일 (우선순위)
 
 1. **Corrado는 동결.** A/B/C/블러/D(창을 논문에 안 쓰면) 다시 돌리지 말 것.
-2. **지금: `*_core.mat`를 monk로 복사한 뒤 `convert_osu_core` (마스크 없이).** QA에서 LV·Aao를 그리고 fail-cheap. 배경위상 그림으로 제트를 판단하지 말 것.
+2. **지금: QA에서 LV 공동 + 얇은 Aao 평면을 그린 뒤 `osu_failcheap_gate`.** 470 mL와 p99 35 cm/s는 placeholder라 인용 금지. 논문 Aao 피크 180 cm/s는 마스크 후에 본다.
 3. **Charité는 문의만** — 윈도우 CORe를 돌릴 수 없거나 게이트 FAIL 뒤. CFD 금지.
 4. **혈전 솔버는 아직 아님.**
 

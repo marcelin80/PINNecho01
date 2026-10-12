@@ -78,9 +78,11 @@ def pack_osu_public_volume(
     period_s: float = 1.0,
     mask: Optional[np.ndarray] = None,
     mag_percentile: float = 70.0,
+    mask_is_lv: bool = False,
 ) -> Dict:
     vel = velocity_from_thetas(
         thetas["thetaX"], thetas["thetaY"], thetas["thetaZ"], venc_mps)
+    used_placeholder = mask is None
     if mask is None:
         if "xHat" not in thetas:
             raise ValueError("need xHat for a magnitude mask, or pass mask=")
@@ -100,5 +102,5 @@ def pack_osu_public_volume(
         "times": times,
         "cycle_period": float(period_s),
         "venc_mps": float(venc_mps),
-        "mask_is_lv": False,
+        "mask_is_lv": False if used_placeholder else bool(mask_is_lv),
     }

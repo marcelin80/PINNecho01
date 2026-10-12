@@ -178,9 +178,9 @@ def test_write_gate_json_and_qa(tmp_path):
     img = nibabel.load(str(qdir / "peak_speed.nii.gz"))
     assert img.header.get_zooms()[:3] == pytest.approx((2.0, 2.0, 2.0))
     data = np.asanyarray(img.dataobj)
-    assert float(data.max()) > 0.0
+    assert float(data.max()) > 100.0  # display-scaled, not raw m/s
     # Masked draw volume must not keep the unmasked VENC·√3 noise tail.
-    assert data[~eval_mask].max() == 0.0
+    assert float(data[~eval_mask].max()) == 0.0
 
 
 def test_sv_rel_tol_is_pre_registered():

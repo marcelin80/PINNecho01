@@ -507,18 +507,21 @@ def write_osu_qa(
 
     spacing = np.asarray(spacing_m, dtype=np.float64).reshape(3)
     origin = np.asarray(origin_m, dtype=np.float64).reshape(3)
-    # ITK-SNAP expects the NIfTI affine in millimetres, not metres.
-    nifti_note = _try_write_nifti(qa_dir / "peak_speed.nii.gz", peak_draw, spacing, origin)
+    # ITK-SNAP default window is ~0–255. Physical m/s and CORe |xHat|~0.03
+    # look black. NIfTIs are display-scaled; .npy stay physical.
+    peak_nifti = _display_scale(peak_draw, hi=1000.0)
+    nifti_note = _try_write_nifti(qa_dir / "peak_speed.nii.gz", peak_nifti, spacing, origin)
     if mag_mean is not None:
-        _try_write_nifti(qa_dir / "mag_mean.nii.gz", mag_mean, spacing, origin)
+        mag_nifti = _display_scale(mag_mean, hi=1000.0)
+        _try_write_nifti(qa_dir / "mag_mean.nii.gz", mag_nifti, spacing, origin)
     _try_write_nifti(qa_dir / "mask_template.nii.gz", template, spacing, origin)
 
     (qa_dir / "README.txt").write_text(
         "OSU dataset #11 QA — draw an LV cavity and an Aao analysis plane.\n"
         "Magnitude is not LV. Do not train. Do not start a thrombus solver.\n\n"
         "ITK-SNAP: open mag_mean.nii.gz first (anatomy). Add peak_speed.nii.gz\n"
-        "as a separate image. Affine is millimetres. peak_speed is magnitude-\n"
-        "masked so air/VENC noise does not wash the contrast.\n"
+        "as a separate image. Affine is millimetres. NIfTI intensities are\n"
+        "1–99 percentile → 0–1000 for SNAP's default window. .npy are physical.\n"
         "save LV as rest_lv_mask.nii.gz and a thin Aao plane as "
         "rest_aao_mask.nii.gz.\n"
         "Or paint into mask_template.npy (uint8, same grid) and save as .npy.\n\n"
@@ -559,6 +562,20 @@ def _write_mid_slices(path: Path, vol: np.ndarray, *, title: str) -> None:
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
+
+
+def _display_scale(arr: np.ndarray, *, hi: float = 1000.0) -> np.ndarray:
+    """Stretch finite voxels to ``[0, hi]`` so ITK-SNAP is not black."""
+    a = np.asarray(arr, dtype=np.float64)
+    sel = a[np.isfinite(a)]
+    sel = sel[sel > 0]
+    if sel.size == 0:
+        return np.zeros_like(a, dtype=np.float32)
+    lo, hi_p = np.percentile(sel, (1.0, 99.0))
+    if hi_p <= lo:
+        hi_p = lo + 1e-6
+    out = (a - lo) / (hi_p - lo) * float(hi)
+    return np.clip(out, 0.0, float(hi)).astype(np.float32)
 
 
 def _try_write_nifti(path: Path, array: np.ndarray, spacing_m, origin_m) -> str:

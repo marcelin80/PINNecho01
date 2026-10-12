@@ -106,7 +106,9 @@ Do not rerun B. Do not adopt on the 10 cm/s millilitre recovery.
 
 ## Commands
 
-Do not overwrite `stasis_recon.json`. Do not rerun A.
+Do not overwrite `stasis_recon.json`. Do not rerun A or B.
+
+**Next (no train):** blur-GT. Minutes, not hours. Needs `.venv`.
 
 ```bash
 # blur-GT (no train) — run before or beside B

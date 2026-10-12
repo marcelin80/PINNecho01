@@ -16,8 +16,14 @@ Blur-GT Dice upper bound (no train; voxel σ ≈ PINN smoothness)::
 
 Reconstruction vs that GT. Commands: see
 ``docs/results/public_volume/JET_PRESERVE.md``. Do not overwrite
-``stasis_recon.json``. Do not rerun A.
+``stasis_recon.json``. Do not rerun A or B.
 """
+
+# Frozen Corrado PINN jet Dice at 15 cm/s. Do not rerun A/B to refresh these.
+CORRADO_PINN_JET_DICE_015 = {
+    "A": (0.625, 0.532, 0.525),
+    "B": (0.643, 0.685, 0.646),
+}
 
 import _bootstrap  # noqa: F401
 import json
@@ -57,6 +63,22 @@ def _print_cut_row(cut, vol, prefix=""):
           f"dice={vol['jet_dice']:.3f} P={vol['jet_precision']:.3f} "
           f"R={vol['jet_recall']:.3f} slow={vol['slow_speed_relL2']:.3f} "
           f"peak={vol['peak_ratio_median']:.3f}")
+
+
+def _print_blur_ceiling(blur_rows) -> None:
+    a = CORRADO_PINN_JET_DICE_015["A"]
+    b = CORRADO_PINN_JET_DICE_015["B"]
+    print("ceiling vs frozen PINN 15 cm/s Dice "
+          f"(A mean {sum(a) / 3:.3f}, B mean {sum(b) / 3:.3f})")
+    print("  rule: blur ~0.6 => resolution ceiling; "
+          "blur ~0.9 => PINN worse than 1-vox blur")
+    for sig, by_cut in blur_rows.items():
+        vol = by_cut.get("0.15")
+        if vol is None:
+            continue
+        dice = float(vol["jet_dice"])
+        print(f"  sigma={sig} vox  15 cm/s blur dice={dice:.3f}  "
+              f"peak={vol['peak_ratio_median']:.3f}")
 
 
 def _score_cuts(vel_true, vel_pred, mask, spacing, cuts, persist_frac, rho):
@@ -171,9 +193,15 @@ def main() -> None:
             blur_rows[f"{sig:g}"] = _score_cuts(
                 arrays["velocity"], vel_b, arrays["mask"], arrays["spacing"],
                 cuts, args.persist_frac, arrays["rho"])
+        _print_blur_ceiling(blur_rows)
         result["which"] = "stasis_blur_gt"
         result["blur_sigma"] = [float(s) for s in args.blur_sigma]
         result["blur_gt"] = blur_rows
+        result["pinn_reference_jet_dice_015"] = {
+            k: list(v) for k, v in CORRADO_PINN_JET_DICE_015.items()}
+        result["blur_ceiling_rule"] = (
+            "blur dice ~0.6 => resolution ceiling; "
+            "~0.9 => PINN worse than 1-vox blur")
 
     if args.train:
         torch.set_default_dtype(torch.float32)

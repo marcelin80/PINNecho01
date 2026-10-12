@@ -65,8 +65,9 @@ the high-speed core.
 
 ## What this does not close
 
-Blur-GT (no train) is still the resolution ceiling for 15 cm/s Dice
-~0.66. C (`--n-windows 1`) is still required before claiming that
-windows protect the jet. `|v_beam|` cannot see a cross-beam jet.
+Blur-GT (no train) is the next measurement: is 15 cm/s Dice ~0.66 a
+resolution ceiling? C (`--n-windows 1`) is still required before
+claiming that windows protect the jet. `|v_beam|` cannot see a
+cross-beam jet.
 
 Not a thrombus.

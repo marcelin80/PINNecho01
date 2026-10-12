@@ -4,8 +4,9 @@ Corrado A/B/C/blur are **closed**. Do not rerun them. This file locks the
 reject rules **before** the laptop CORe recon exists. Do not move them
 after seeing millilitres.
 
-monk (2026-10-12): `command -v matlab` empty. Gate not scored. Do not
-curl k-space. Send [`CHARITE_INQUIRY.md`](../../data/CHARITE_INQUIRY.md).
+monk (2026-10-12): Linux PATH has no `matlab`. That is **not** a Charité
+trigger. Run CORe on Windows MATLAB ≥ 2019, copy `*_core.mat` to monk.
+Do not install a second Linux MATLAB for this. Do not rewrite CORe.
 
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet
 (Arshad et al., *Magn Reson Med* 2024; dataset #11). Aao peak ~180 cm/s

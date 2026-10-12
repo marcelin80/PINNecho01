@@ -16,45 +16,37 @@ measured 3-component volume. One rest subject (dataset #11 is a
 
 The `.mat` is self-gated expiratory **k-space**, 20 cardiac bins — not a
 velocity NPZ. Do **not** download the 5.1 GB cine first. Do **not**
-rewrite CORe in Python. If MATLAB ≥ 2019 is missing, **stop**.
+rewrite CORe in Python. MATLAB ≥ 2019 can be **Windows**. Do not install
+a Linux copy just because PINNecho runs in a monk venv.
 
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet. Dataset #11
 Aao peak ~180 cm/s, so whole-heart `speed_p99` will clear 10 cm/s. That
 does not mean the LV has a usable jet.
 
-## Laptop step 1 — MATLAB check, then download + clone
+## Step 1 — CORe host is Windows MATLAB (not a Linux reinstall)
 
-monk (2026-10-12): `command -v matlab` was empty. That is a **stop**,
-not a reason to rewrite CORe. Hunt off-PATH before declaring none.
-If still empty, **do not curl** the 807 MB k-space; send
-[`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md).
+monk PATH has no `matlab`. The PINNecho venv does not need one.
+Install Linux MATLAB only if the Windows copy is missing, older than
+R2019, or you cannot boot/reach that machine. Octave is not a substitute.
 
-```bash
-# stop here if this exits 2 — do not continue to curl
-bash scripts/osu_matlab_check.sh
-```
+On **Windows** (PowerShell). md5 must match before `main_recon`.
 
-Only if that printed a `MATLAB` path:
-
-```bash
-cd ~/PINNecho01
-mkdir -p data/osu_4dflow
-cd data/osu_4dflow
-
-curl -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat \
+```powershell
+mkdir $HOME\PINNecho01-osu -Force | Out-Null
+cd $HOME\PINNecho01-osu
+curl.exe -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat `
   "https://zenodo.org/api/records/12515230/files/4D_Flow_Cartesian_Dataset_11.mat/content"
-md5sum 4D_Flow_Cartesian_Dataset_11.mat
-# expect 7a0466a6f173590990d827350c0b34df
-
+Get-FileHash 4D_Flow_Cartesian_Dataset_11.mat -Algorithm MD5
+# expect 7A0466A6F173590990D827350C0B34DF
 git clone --depth 1 https://github.com/OSU-MR/motion-robust-CMR.git
 ```
 
 Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
 
-## Laptop step 2 — CORe only (skip CS)
+## Step 2 — CORe only on Windows (skip CS)
 
 ```matlab
-cd('.../motion-robust-CMR/3D cine-4D flow MRI Reconstruction (Study III IV V)')
+cd('...\motion-robust-CMR\3D cine-4D flow MRI Reconstruction (Study III IV V)')
 % in main_recon.m set:  recon = ["core"];   opt.use_gpu = 1 if NVIDIA
 main_recon
 % prompts: save name (e.g. rest11); flow=1; rest=1;
@@ -64,8 +56,10 @@ main_recon
 Paper wall-clock ~11 min (GPU). Output:
 `outputs.thetaX/Y/Z` (phase, **not** m/s) and `outputs.xHat`.
 Saved as `<saveName>_<date>_core/<saveName>_<date>_core.mat`.
+Copy **that** file to monk (`~/PINNecho01/data/osu_4dflow/`). The 807 MB
+k-space can stay on Windows.
 
-## Laptop step 3 — pack whole-heart + QA (no LV claim)
+## Laptop step 3 — pack whole-heart + QA on monk (no LV claim)
 
 `--mask` must be an LV cavity. A magnitude percentile is a placeholder
 and leaves the gate **PENDING**.

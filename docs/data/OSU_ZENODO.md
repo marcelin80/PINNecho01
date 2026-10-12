@@ -38,7 +38,10 @@ curl.exe -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat `
   "https://zenodo.org/api/records/12515230/files/4D_Flow_Cartesian_Dataset_11.mat/content"
 Get-FileHash 4D_Flow_Cartesian_Dataset_11.mat -Algorithm MD5
 # expect 7A0466A6F173590990D827350C0B34DF
-git clone --depth 1 https://github.com/OSU-MR/motion-robust-CMR.git
+# Windows often has no git — zip is enough
+curl.exe -L --fail -o motion-robust-CMR.zip `
+  "https://github.com/OSU-MR/motion-robust-CMR/archive/refs/heads/main.zip"
+Expand-Archive -Force motion-robust-CMR.zip -DestinationPath .
 ```
 
 Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
@@ -46,11 +49,12 @@ Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
 ## Step 2 — CORe only on Windows (skip CS)
 
 ```matlab
-cd('...\motion-robust-CMR\3D cine-4D flow MRI Reconstruction (Study III IV V)')
-% in main_recon.m set:  recon = ["core"];   opt.use_gpu = 1 if NVIDIA
+cd('C:\Users\marce\PINNecho01-osu\motion-robust-CMR-main\3D cine-4D flow MRI Reconstruction (Study III IV V)')
+% edit main_recon.m line ~56:  recon=["cs","core"];  →  recon=["core"];
+% default opt.use_gpu=1; set 0 if this Windows box has no NVIDIA
 main_recon
-% prompts: save name (e.g. rest11); flow=1; rest=1;
-% then pick 4D_Flow_Cartesian_Dataset_11.mat
+% prompts: save name rest11;  flow=1;  rest=1;
+% file picker: C:\Users\marce\PINNecho01-osu\4D_Flow_Cartesian_Dataset_11.mat
 ```
 
 Paper wall-clock ~11 min (GPU). Output:

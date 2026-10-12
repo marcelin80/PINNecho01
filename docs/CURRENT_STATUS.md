@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-12 · 브랜치 `cursor/osu-failcheap-gate-935e` · Corrado 동결, OSU 팩 PENDING, LV·Aao 마스크 대기
+> 2026-10-12 · 브랜치 `cursor/osu-gate-noise-floor-935e` · Corrado 동결, OSU 팩 PENDING, **게이트 1 개정** (p99 폐기), 마스크는 그 다음
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -35,7 +35,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
-| OSU rest 4D-flow (#11) | **팩 PENDING** | (20,77,96,72). placeholder p99 0.35 m/s. unmasked max 3.44 m/s = VENC√3 잡음. QA NIfTI 있음. LV·Aao 다음. |
+| OSU rest 4D-flow (#11) | **팩 PENDING, 게이트 1 개정** | (20,77,96,72). 폐기: LV p99≥10 cm/s (잡음만으로 통과). 대체: 조직 3× time-RMS, 푸리에 1–4 ≥0.55, Aao±40%, 승모/대동맥 SV 균형, jet_chamber. 자동박스 43:60 59:69 15:37은 LV 아님. |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---
@@ -129,9 +129,10 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 ## 5. 지금 열린 일 (우선순위)
 
 1. **Corrado는 동결.** A/B/C/블러/D(창을 논문에 안 쓰면) 다시 돌리지 말 것.
-2. **지금: QA에서 LV 공동 + 얇은 Aao 평면을 그린 뒤 `osu_failcheap_gate`.** 470 mL와 p99 35 cm/s는 placeholder라 인용 금지. 논문 Aao 피크 180 cm/s는 마스크 후에 본다.
-3. **Charité는 문의만** — 윈도우 CORe를 돌릴 수 없거나 게이트 FAIL 뒤. CFD 금지.
-4. **혈전 솔버는 아직 아님.**
+2. **게이트 1은 개정됨.** 폐기된 `speed_p99 ≥ 10 cm/s`로 채점하지 말 것. 조직 ROI·푸리에·판막 균형이 먼저다. QA NIfTI 576은 0–1000 표시값이지 cm/s가 아니다.
+3. **그다음: `mag_mean`만 보고** (peak_speed 숨김) 버전된 LV·조직·Aao·승모 마스크. 자동박스는 채점 금지. 30–45분에 윤곽이 안 나오면 중단.
+4. **Charité는 문의만** — 윈도우 CORe 불가, 개정 게이트 FAIL, 또는 30–45분 후. CFD 금지.
+5. **혈전 솔버는 아직 아님.**
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
@@ -183,5 +184,5 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md) | 에코 슬랩 |
 | [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md) | `|v_beam|` 실험 |
 | [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md) | OSU #11: 윈도우 CORe → monk 팩 |
-| [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 3항목 (숫자 잠금, MATLAB 대기) |
+| [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 5항목 (p99 폐기, 조직·푸리에·판막 균형 잠금) |
 | [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (윈도우 CORe 불가/게이트 FAIL 뒤, CFD 금지) |

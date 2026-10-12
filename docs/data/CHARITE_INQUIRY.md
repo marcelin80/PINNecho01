@@ -7,9 +7,11 @@ is not stated. Volunteer LV 4D-flow in the paper: 25 frames,
 1.96×1.96×2.8 mm — not posted. Their CFD vs MRI aortic-valve ΔP was
 7.3 vs 1.6 mmHg; do not take the simulation as GT.
 
-Send this after Windows MATLAB CORe is impossible (no license / R<2019)
-or the OSU fail-cheap gate FAILs. monk PATH being empty is not enough:
-CORe can run on Windows. Do not start Fluent / STAR-CCM+ / LDDMM.
+Send this after Windows MATLAB CORe is impossible (no license / R<2019),
+the OSU fail-cheap gate FAILs, or no confident LV contour is possible in
+30–45 min on `mag_mean` (hide `peak_speed`; do not keep painting). monk
+PATH being empty is not enough: CORe can run on Windows. Do not start
+Fluent / STAR-CCM+ / LDDMM.
 
 To: katharina.vellguth@dhzc-charite.de
 Cc: moritz.wiegand@dhzc-charite.de

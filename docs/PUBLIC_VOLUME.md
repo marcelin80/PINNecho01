@@ -113,9 +113,18 @@ MRI vs registered PIV: [`results/public_volume/STASIS_PIV.md`](results/public_vo
 Echo-plane slabs vs that jet (no train):
 [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md)
 (A4C 22.3 / 30.4 mL at the fat 0.12 AABB slab; PLAX = A4C).
-Jet-preserve lever (`|v_beam|` only, not the GT jet):
+Jet-preserve lever (`|v_beam|` per-frame quantile, not the GT jet, not
+the 5/10/15 cm/s cuts):
 [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md).
-1- vs 3-window jet +2.5 mL is a one-seed hypothesis.
+1- vs 3-window jet is now 3-seed
+([`results/public_volume/STASIS_RECON_W1.md`](results/public_volume/STASIS_RECON_W1.md);
++1.6 mL mean at 10 cm/s).
+3-window × 3 seed: [`results/public_volume/STASIS_RECON_SEEDS.md`](results/public_volume/STASIS_RECON_SEEDS.md)
+(10 cm/s 24.2–26.2 mL; 15 cm/s Dice ~0.56). B (`|v_beam|` p80) is
+recorded and **rejected**:
+[`results/public_volume/STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md).
+Blur-GT σ=1: [`results/public_volume/STASIS_BLUR_GT.md`](results/public_volume/STASIS_BLUR_GT.md)
+(15 cm/s Dice 0.760, 10 cm/s 0.911; PINN below both).
 
 ```bash
 python scripts/public_volume_stasis.py \

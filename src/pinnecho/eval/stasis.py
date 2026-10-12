@@ -63,6 +63,52 @@ def _mask_t(velocity: np.ndarray, mask: np.ndarray) -> np.ndarray:
     raise ValueError(f"mask {mask.shape} vs velocity {velocity.shape}")
 
 
+def peak_speed(velocity: np.ndarray) -> np.ndarray:
+    """Per-voxel max_t |u| on a ``(T, Nx, Ny, Nz, 3)`` field."""
+    velocity = np.asarray(velocity, dtype=np.float64)
+    return np.linalg.norm(velocity, axis=-1).max(axis=0)
+
+
+def peak_speed_report(
+    vel_true: np.ndarray,
+    vel_pred: np.ndarray,
+    jet_mask: np.ndarray,
+) -> Dict[str, float]:
+    """Pred/GT peak-speed ratio on the GT jet (amplitude-bias check)."""
+    pt = peak_speed(vel_true)
+    pp = peak_speed(vel_pred)
+    jet = np.asarray(jet_mask, dtype=bool)
+    sel = jet & np.isfinite(pt) & (pt > 1e-8)
+    if int(sel.sum()) == 0:
+        return {"peak_ratio_mean": float("nan"),
+                "peak_ratio_median": float("nan"),
+                "peak_true_mean": float("nan"),
+                "peak_pred_mean": float("nan"),
+                "n_jet_peak": 0.0}
+    ratio = pp[sel] / pt[sel]
+    return {
+        "peak_ratio_mean": float(ratio.mean()),
+        "peak_ratio_median": float(np.median(ratio)),
+        "peak_true_mean": float(pt[sel].mean()),
+        "peak_pred_mean": float(pp[sel].mean()),
+        "n_jet_peak": float(sel.sum()),
+    }
+
+
+def blur_velocity(velocity: np.ndarray, sigma_vox: float) -> np.ndarray:
+    """Isotropic Gaussian blur of each frame/component (voxel σ)."""
+    from scipy.ndimage import gaussian_filter
+    velocity = np.asarray(velocity, dtype=np.float64)
+    if sigma_vox <= 0:
+        return velocity.copy()
+    out = np.empty_like(velocity)
+    for t in range(velocity.shape[0]):
+        for c in range(velocity.shape[-1]):
+            out[t, ..., c] = gaussian_filter(
+                velocity[t, ..., c], sigma=float(sigma_vox), mode="nearest")
+    return out
+
+
 def persistent_stasis_mask(
     velocity: np.ndarray,
     mask: np.ndarray,
@@ -70,7 +116,13 @@ def persistent_stasis_mask(
     speed_thresh: float,
     persist_frac: float = DEFAULT_PERSIST_FRAC,
 ) -> np.ndarray:
-    """Boolean ``(Nx, Ny, Nz)`` persistent-stasis mask at a *fixed* cut."""
+    """Boolean ``(Nx, Ny, Nz)`` persistent-stasis mask at a *fixed* cut.
+
+    Persist = cavity voxels with ``|u| < cut`` for ``≥ persist_frac`` of
+    frames (default 50 % of the cycle). The jet remainder is
+    ``cavity & ~persist``: above the cut for **more than half** the cycle.
+    That is **not** “ever exceeded the cut.”
+    """
     velocity = np.asarray(velocity, dtype=np.float64)
     interior = _mask_t(velocity, mask)
     speed = np.linalg.norm(velocity, axis=-1)
@@ -165,19 +217,40 @@ def compare_volume_stasis(
     jinter = float(np.logical_and(jet_t, jet_p).sum())
     jna, jnb = float(jet_t.sum()), float(jet_p.sum())
     jet_dice = (2.0 * jinter / (jna + jnb)) if (jna + jnb) > 0 else 1.0
+    jet_precision = (jinter / jnb) if jnb > 0 else float("nan")
+    jet_recall = (jinter / jna) if jna > 0 else float("nan")
+    signed_jet_err = (
+        (float(pred["jet_ml"]) - float(gt["jet_ml"])) / float(gt["jet_ml"])
+        if float(gt["jet_ml"]) > 0 else float("nan"))
+    speed_t = np.linalg.norm(np.asarray(vel_true, dtype=np.float64), axis=-1)
+    speed_p = np.linalg.norm(np.asarray(vel_pred, dtype=np.float64), axis=-1)
+    if int(a.sum()) > 0:
+        st = speed_t[:, a]
+        sp = speed_p[:, a]
+        denom = float(np.linalg.norm(st))
+        slow_speed_relL2 = float(
+            np.linalg.norm(sp - st) / max(denom, 1e-12))
+    else:
+        slow_speed_relL2 = float("nan")
+    peaks = peak_speed_report(vel_true, vel_pred, jet_t)
     return {
         "speed_thresh": thresh,
         "persist_stasis_ml_true": gt["persist_stasis_ml"],
         "persist_stasis_ml_pred": pred["persist_stasis_ml"],
         "jet_ml_true": gt["jet_ml"],
         "jet_ml_pred": pred["jet_ml"],
+        "signed_jet_err": signed_jet_err,
         "persist_stasis_dice": dice,
         "jet_dice": jet_dice,
+        "jet_precision": jet_precision,
+        "jet_recall": jet_recall,
+        "slow_speed_relL2": slow_speed_relL2,
         "stasis_frac_true": gt["stasis_frac"],
         "stasis_frac_pred": pred["stasis_frac"],
         "speed_mean_true": gt["speed_mean"],
         "speed_mean_pred": pred["speed_mean"],
         "cavity_ml": gt["cavity_ml"],
+        **peaks,
     }
 
 

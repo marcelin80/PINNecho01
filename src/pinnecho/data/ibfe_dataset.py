@@ -198,6 +198,30 @@ def build_doppler_from_frames(frames, transducers: Sequence,
     return torch.cat(Xs, 0), torch.cat(beams, 0), torch.cat(vs, 0)
 
 
+def per_frame_vbeam_fast_mask(v_beam, times, quantile: float) -> torch.Tensor:
+    """Fast set = per-frame rank of observed ``|v_beam|``, not 5/10/15 cm/s.
+
+    A row is fast when its ``|v_beam|`` is at or above that time-frame's
+    quantile. The cut therefore moves with the Doppler distribution and is
+    independent of the Eulerian eval thresholds. Cross-beam jets (motion
+    perpendicular to the window) stay invisible: this mask cannot see them.
+    """
+    vb = v_beam.detach().abs().reshape(-1)
+    t = times.detach().reshape(-1)
+    if vb.numel() != t.numel():
+        raise ValueError(f"v_beam {tuple(v_beam.shape)} vs times {tuple(times.shape)}")
+    q = float(quantile)
+    if not 0.0 < q < 1.0:
+        raise ValueError(f"quantile must be in (0, 1), got {q}")
+    mask = torch.zeros_like(vb, dtype=torch.bool)
+    for tv in torch.unique(t):
+        sel = t == tv
+        if int(sel.sum()) == 0:
+            continue
+        mask[sel] = vb[sel] >= torch.quantile(vb[sel].float(), q)
+    return mask
+
+
 def _stratified_randint(n_keep, fast_mask, generator, fast_frac):
     """Draw ``n_keep`` indices; ``fast_frac`` come from ``fast_mask`` True entries.
 
@@ -243,7 +267,8 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
                             planes: Optional[Sequence] = None,
                             tracking: Optional[str] = None,
                             data_fast_frac: Optional[float] = None,
-                            data_fast_thresh: float = 0.10):
+                            data_fast_thresh: float = 0.10,
+                            data_fast_quantile: Optional[float] = None):
     """Return a ``build_batches(step)`` closure sourced from ``frames``.
 
     **Forcing is evaluation-only ground truth (an oracle), not a deliverable
@@ -275,10 +300,16 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
     the literature-calibrated tracking error when comparing a realistic Model A
     against an accurate-wall Model B.
 
-    ``data_fast_frac`` oversamples Doppler rows with ``|v_beam| >= data_fast_thresh``.
-    That threshold is on the **observed** beam component, not the 3-component GT
-    jet. Using the GT persist/jet mask here is the same circularity as feeding
-    oracle ``f``. Collocation stays uniform.
+    ``data_fast_frac`` oversamples Doppler rows from an *observable* fast set
+    on ``|v_beam|`` (never the GT 3-component jet; that is the same
+    circularity as feeding oracle ``f``). The set is defined by
+    ``data_fast_quantile`` (per-frame rank of ``|v_beam|``, independent of
+    the 5/10/15 cm/s eval cuts). ``data_fast_thresh`` is an absolute m/s
+    fallback used only when the quantile is omitted — do not pass 0.10 for
+    the B lever, or the comparison to those cuts becomes circular.
+    ``|v_beam|`` cannot see a jet moving perpendicular to the beam.
+    Collocation stays uniform. ``n_data`` is the batch size and does not
+    grow with window count unless the caller scales it.
     """
     from .ibfe_io import frames_to_dtype
     from .tracking_noise import apply_tracking_noise, resolve_tracking
@@ -299,7 +330,11 @@ def make_ibfe_batch_builder(frames, transducers: Optional[Sequence] = None,
         data_X, beam_dir, v_beam = build_doppler_from_frames(
             frames, transducers, noise_level=noise_level, seed=seed)
     g = torch.Generator().manual_seed(seed)
-    data_fast = v_beam.abs().reshape(-1) >= float(data_fast_thresh)
+    if data_fast_quantile is not None:
+        data_fast = per_frame_vbeam_fast_mask(
+            v_beam, data_X[:, dim], data_fast_quantile)
+    else:
+        data_fast = v_beam.abs().reshape(-1) >= float(data_fast_thresh)
 
     forcing_fluid = frames.forcing_fluid
     mode = forcing_control if forcing_control is not None else (
@@ -462,7 +497,8 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
                tracking: Optional[str] = None,
                n_data: int = 3072,
                data_fast_frac: Optional[float] = None,
-               data_fast_thresh: float = 0.10):
+               data_fast_thresh: float = 0.10,
+               data_fast_quantile: Optional[float] = None):
     """Train a backbone on ``frames`` end-to-end and return ``(model, metrics)``.
 
     ``backbone="fsi_param"`` trains the **deliverable** Model B (accurate FSI wall
@@ -495,7 +531,8 @@ def train_ibfe(frames, backbone: str = "fsi_informed", steps: int = 1500,
         param_forcing=(backbone == "fsi_param"), band_frac=band_frac,
         planes=planes, tracking=wall_tracking,
         n_data=int(n_data), data_fast_frac=data_fast_frac,
-        data_fast_thresh=data_fast_thresh)
+        data_fast_thresh=data_fast_thresh,
+        data_fast_quantile=data_fast_quantile)
     cfg = TrainConfig(steps=steps, lr=lr, lbfgs_iters=lbfgs_iters,
                       log_every=max(1, steps // 6), seed=seed)
     logger = None

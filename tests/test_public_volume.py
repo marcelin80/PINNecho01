@@ -17,7 +17,8 @@ from pinnecho.data import (
 )
 from pinnecho.data.ibfe_dataset import (
     _stratified_randint, build_doppler_from_frames,
-    default_windows_from_frames, make_ibfe_batch_builder, train_ibfe,
+    default_windows_from_frames, make_ibfe_batch_builder,
+    per_frame_vbeam_fast_mask, train_ibfe,
 )
 from pinnecho.data.public_volume import (
     frames_from_public_volume, rasterize_synthetic_lv_3d,
@@ -155,6 +156,52 @@ def test_data_fast_frac_oversamples_abs_v_beam():
             for i in range(15)]
     assert float(np.mean(hits)) > pool
     assert float(np.mean(hits)) == pytest.approx(0.5, abs=0.12)
+
+
+def test_per_frame_vbeam_fast_mask_is_a_rank_not_a_cm_cut():
+    # Two frames, 100 rows each. Frame 0 is slow (max 4 cm/s); frame 1 is
+    # fast (max 40 cm/s). A 10 cm/s cut would mark frame 0 empty and most
+    # of frame 1. The per-frame quantile marks ~20 % of *each* frame.
+    vb = torch.zeros(200)
+    t = torch.cat([torch.zeros(100), torch.ones(100)])
+    vb[:100] = torch.linspace(0.0, 0.04, 100)
+    vb[100:] = torch.linspace(0.0, 0.40, 100)
+    mask = per_frame_vbeam_fast_mask(vb, t, 0.80)
+    assert int(mask[:100].sum()) == pytest.approx(20, abs=1)
+    assert int(mask[100:].sum()) == pytest.approx(20, abs=1)
+    # Independent of 5/10/15 cm/s: the slow frame still contributes.
+    assert not bool((vb[:100].abs() >= 0.10).any())
+    assert bool(mask[:100].any())
+
+
+def test_data_fast_frac_uses_per_frame_quantile_when_set():
+    frames = synthetic_public_volume_frames(
+        Config(), nx=10, ny=10, nz=12, n_frames=2, n_fluid=400, n_wall=80)
+    transducers = default_windows_from_frames(frames, n_windows=1)
+    X, _, vb = build_doppler_from_frames(
+        frames, transducers, noise_level=0.0, seed=0)
+    dim = frames.spatial_dim
+    times = X[:, dim]
+    fast = per_frame_vbeam_fast_mask(vb, times, 0.80)
+    pool = float(fast.float().mean())
+    cuts = {}
+    for tv in torch.unique(times):
+        cuts[float(tv)] = float(torch.quantile(vb.reshape(-1)[times == tv].abs(), 0.80))
+    build = make_ibfe_batch_builder(
+        frames, transducers=transducers, n_data=80, noise_level=0.0,
+        data_fast_frac=0.5, data_fast_quantile=0.80, seed=0)
+    hits = []
+    for i in range(15):
+        batch = build(i)
+        vb_b = batch["data"]["v_beam"].abs().reshape(-1)
+        t_b = batch["data"]["X"][:, dim]
+        marked = torch.zeros_like(vb_b, dtype=torch.bool)
+        for tv, cut in cuts.items():
+            marked[t_b == tv] = vb_b[t_b == tv] >= cut
+        hits.append(float(marked.float().mean()))
+    assert pool < 0.35
+    assert float(np.mean(hits)) > pool
+    assert float(np.mean(hits)) == pytest.approx(0.5, abs=0.15)
 
 
 def test_oracle_gt_speed_cap_still_works():

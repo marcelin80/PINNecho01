@@ -3,14 +3,16 @@
 import math
 
 import numpy as np
+import pytest
 import torch
 
 from pinnecho.config import Config
 from pinnecho.data import synthetic_public_volume_frames
 from pinnecho.data.ibfe_dataset import evaluate_ibfe, train_ibfe
 from pinnecho.eval.stasis import (
-    compare_point_stasis, compare_registered_volumes, compare_volume_stasis,
-    resolve_speed_thresh, volume_stasis_report,
+    blur_velocity, compare_point_stasis, compare_registered_volumes,
+    compare_volume_stasis, peak_speed, peak_speed_report,
+    persistent_stasis_mask, resolve_speed_thresh, volume_stasis_report,
 )
 
 
@@ -133,8 +135,68 @@ def test_compare_volume_zero_pred_eats_the_jet():
         vel, np.zeros_like(vel), mask, spacing=(0.002, 0.002, 0.002))
     assert m["jet_ml_pred"] == 0.0
     assert m["jet_dice"] == 0.0
+    assert m["signed_jet_err"] == -1.0
+    assert m["jet_recall"] == 0.0
+    assert math.isnan(m["jet_precision"])
     assert m["persist_stasis_ml_pred"] > m["persist_stasis_ml_true"]
     assert m["persist_stasis_dice"] < 1.0
+    assert m["slow_speed_relL2"] >= 0.0
+    assert m["peak_ratio_median"] == 0.0
+
+
+def test_compare_volume_identical_has_unit_precision_recall():
+    vel, mask = _split_cavity_volume()
+    m = compare_volume_stasis(vel, vel, mask, spacing=(0.002, 0.002, 0.002))
+    assert m["signed_jet_err"] == 0.0
+    assert m["jet_precision"] == 1.0
+    assert m["jet_recall"] == 1.0
+    assert m["slow_speed_relL2"] == 0.0
+    assert m["peak_ratio_mean"] == 1.0
+    assert m["peak_ratio_median"] == 1.0
+
+
+def test_jet_is_majority_above_cut_not_ever_above():
+    # 4 frames. Voxel A is fast in 1/4 → persist. Voxel B is fast in 3/4 → jet.
+    t_len, n = 4, 4
+    vel = np.zeros((t_len, n, n, n, 3))
+    mask = np.zeros((n, n, n), dtype=bool)
+    mask[1, 1, 1] = True  # A
+    mask[2, 2, 2] = True  # B
+    vel[0, 1, 1, 1, 0] = 0.40
+    vel[:3, 2, 2, 2, 0] = 0.40
+    persist = persistent_stasis_mask(vel, mask, speed_thresh=0.10, persist_frac=0.50)
+    assert persist[1, 1, 1]
+    assert not persist[2, 2, 2]
+    report = volume_stasis_report(
+        vel, mask, spacing=(0.002, 0.002, 0.002), speed_thresh=0.10, absolute=True)
+    voxel_ml = 0.002 ** 3 * 1e6
+    assert report["jet_ml"] == pytest.approx(voxel_ml)
+    assert report["persist_stasis_ml"] == pytest.approx(voxel_ml)
+
+
+def test_peak_speed_ratio_on_scaled_field():
+    vel, mask = _split_cavity_volume()
+    persist = persistent_stasis_mask(vel, mask, speed_thresh=0.10)
+    cavity = mask if mask.ndim == 3 else mask.any(axis=0)
+    jet = cavity & np.logical_not(persist)
+    half = peak_speed_report(vel, 0.5 * vel, jet)
+    assert half["peak_ratio_mean"] == pytest.approx(0.5)
+    assert half["peak_ratio_median"] == pytest.approx(0.5)
+    assert half["n_jet_peak"] > 0
+    ident = peak_speed_report(vel, vel, jet)
+    assert ident["peak_ratio_mean"] == pytest.approx(1.0)
+    assert peak_speed(vel).shape == vel.shape[1:4]
+
+
+def test_blur_gt_is_a_resolution_upper_bound():
+    vel, mask = _split_cavity_volume()
+    sharp = compare_volume_stasis(vel, vel, mask, spacing=(0.002, 0.002, 0.002))
+    blurred = blur_velocity(vel, sigma_vox=1.0)
+    soft = compare_volume_stasis(
+        vel, blurred, mask, spacing=(0.002, 0.002, 0.002))
+    assert sharp["jet_dice"] == 1.0
+    assert soft["jet_dice"] < 1.0
+    assert soft["peak_ratio_median"] < 1.0
 
 
 def test_evaluate_ibfe_includes_stasis_keys():

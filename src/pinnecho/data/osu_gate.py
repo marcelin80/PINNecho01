@@ -3,21 +3,35 @@
 Corrado A/B/C/blur are closed. After MATLAB CORe, this is the next measured
 check — not a train, not a thrombus, not an LV claim from a magnitude cut.
 
-Three checks, written down before the laptop recon exists:
+The original check 1 (LV ``speed_p99`` ≥ 10 cm/s) is **retired**. Peak
+``max_t |u|`` is positively biased over 20 frames; the placeholder p99 is
+already 35 cm/s and unmasked air hits VENC·√3 ≈ 344 cm/s. That cut cannot
+fail on noise. Locked replacements, written before any painted LV is scored:
 
-1. ``speed_p99`` on an **LV** mask ≥ 10 cm/s. The same number on a magnitude
-   placeholder is PENDING: dataset #11 Aao peak is ~180 cm/s, so whole-heart
-   p99 will clear the cut even if the LV jet is unusable.
-2. Ascending-aorta stroke volume vs the paper 2D-PC ref **93.6 mL/beat**
-   (Arshad et al., *Magn Reson Med* 2024, Fig. 4 / dataset #11). Relative
-   error > 0.40 is FAIL. No Aao analysis plane is PENDING.
-3. The 10 cm/s Eulerian remainder (``cavity & ~persist``) must live in the
-   LV chamber, not the aorta / LVOT. Computed on the whole-heart eval mask.
-   A thin Aao plane is **only** for check 2; pass ``aorta_mask`` if you
-   have a filled LVOT/arch region.
+1. ``lv_vs_tissue`` — spatial median of per-voxel **time-RMS** |u| on an
+   LV mask must be ≥ **3×** the same statistic on a static-tissue ROI
+   (chest-wall muscle, not lung). No tissue ROI is PENDING. Reported
+   ``legacy_speed_p99`` is diagnostic only.
+2. ``time_consistency`` — AC power of the spatial-mean velocity curve
+   must have ≥ **0.55** in Fourier harmonics 1–4 (cardiac). Flat /
+   DC-only is noise or static tissue.
+3. ``aao_sv`` — ascending-aorta stroke volume vs the paper 2D-PC ref
+   **93.6 mL/beat** (Arshad et al., *Magn Reson Med* 2024, Fig. 4 /
+   dataset #11). Relative error > 0.40 is FAIL. No Aao plane is PENDING.
+4. ``valve_balance`` — |SV_mitral − SV_aorta| / max(|SV|) ≤ **0.40**.
+   Integration cancels zero-mean noise. Missing mitral or Aao plane is
+   PENDING.
+5. ``jet_chamber`` — 10 cm/s remainder (``cavity & ~persist``) ≥ 50 %
+   inside the LV and < 50 % inside an optional aorta/LVOT *region*.
+   A thin Aao plane is **only** for stroke volume.
 
-PASS is all three. PASS does not authorize a thrombus solver or the 5.1 GB
-cine. FAIL → Charité 4D-flow inquiry, not CFD.
+``outputs.theta*`` from ``main_recon`` already have cmapx/y/z applied.
+This packer does not re-estimate background phase; residual static-tissue
+speed is the leftover.
+
+PASS is all five. PASS does not authorize a thrombus solver or the 5.1 GB
+cine. FAIL or no confident LV contour in 30–45 min → Charité inquiry, not
+CFD. The discarded auto-box ``43:60 59:69 15:37`` is not an LV.
 """
 
 from __future__ import annotations
@@ -38,28 +52,44 @@ from pinnecho.eval.stasis import (
 
 DATASET11_AAO_SV_ML = 93.6
 DATASET11_AAO_PEAK_MPS = 1.80
-SPEED_P99_MIN_MPS = 0.10
+# Retired as a pass/fail cut. Kept so reports can show that noise clears it.
+LEGACY_SPEED_P99_MIN_MPS = 0.10
+LV_TISSUE_RATIO_MIN = 3.0
+FOURIER_LOW_HARMONICS = 4
+FOURIER_LOW_FRAC_MIN = 0.55
 AAO_SV_REL_TOL = 0.40
+VALVE_SV_REL_TOL = 0.40
 JET_IN_LV_MIN_FRAC = 0.50
 JET_IN_AORTA_MAX_FRAC = 0.50
 JET_SPEED_THRESH = 0.10
 JET_PERSIST_FRAC = 0.50
+# Compat alias — do not use as a gate cut.
+SPEED_P99_MIN_MPS = LEGACY_SPEED_P99_MIN_MPS
 
 THRESHOLDS = {
-    "speed_p99_min_mps": SPEED_P99_MIN_MPS,
+    "lv_tissue_ratio_min": LV_TISSUE_RATIO_MIN,
+    "fourier_low_harmonics": FOURIER_LOW_HARMONICS,
+    "fourier_low_frac_min": FOURIER_LOW_FRAC_MIN,
     "aao_sv_ref_ml": DATASET11_AAO_SV_ML,
     "aao_sv_rel_tol": AAO_SV_REL_TOL,
+    "valve_sv_rel_tol": VALVE_SV_REL_TOL,
     "jet_in_lv_min_frac": JET_IN_LV_MIN_FRAC,
     "jet_in_aorta_max_frac": JET_IN_AORTA_MAX_FRAC,
     "jet_speed_thresh_mps": JET_SPEED_THRESH,
     "jet_persist_frac": JET_PERSIST_FRAC,
+    "legacy_speed_p99_min_mps": LEGACY_SPEED_P99_MIN_MPS,
 }
 
 GATE_NOTES = (
     "Magnitude mask is not an LV segmentation.",
+    "QA NIfTI intensities are display-scaled 0-1000, not cm/s.",
+    "Hide peak_speed while painting; do not trace PC-MRA as a wall.",
+    "Save rest_lv_mask_v1 / v2; do not overwrite after seeing scores.",
+    "Auto-box 43:60 59:69 15:37 (~53 mL, anterior) is not LV.",
+    "CORe theta* already has cmap background-phase correction.",
     "PASS does not authorize a thrombus solver.",
     "Do not download the 5.1 GB cine until PASS.",
-    "FAIL → Charité 4D-flow inquiry, not CFD.",
+    "FAIL or no confident LV in 30-45 min → Charité inquiry, not CFD.",
 )
 
 
@@ -191,6 +221,55 @@ def plane_stroke_volume_ml(
     return sv_m3 * 1e6
 
 
+def masked_rms_speed_median(velocity: np.ndarray, mask: np.ndarray) -> float:
+    """Spatial median of per-voxel time-RMS |u|.
+
+    Not ``max_t |u|``: that peak is positively biased over 20 frames and
+    is what made the retired 10 cm/s p99 cut unable to fail on noise.
+    """
+    velocity = np.asarray(velocity, dtype=np.float64)
+    if velocity.ndim != 5 or velocity.shape[-1] != 3:
+        raise ValueError(f"velocity must be (T,Nx,Ny,Nz,3), got {velocity.shape}")
+    mask3 = as_spatial_mask(mask, velocity.shape[1:4])
+    if not mask3.any():
+        raise ValueError("mask is empty")
+    speed = np.linalg.norm(velocity, axis=-1)
+    rms = np.sqrt(np.mean(np.square(speed[:, mask3]), axis=0))
+    return float(np.median(rms))
+
+
+def temporal_low_harmonic_frac(
+    velocity: np.ndarray,
+    mask: np.ndarray,
+    *,
+    max_harmonic: int = FOURIER_LOW_HARMONICS,
+) -> float:
+    """Fraction of AC power in harmonics 1..``max_harmonic``.
+
+    Uses the spatial-mean velocity curve ``v(t)`` inside ``mask`` (three
+    components, power summed). Cardiac RR modulation piles into 1–4.
+    White noise is flat (~0.40 of rfft AC bins when T=20). DC-only
+    (static residual) returns 0.
+    """
+    velocity = np.asarray(velocity, dtype=np.float64)
+    if velocity.ndim != 5 or velocity.shape[-1] != 3:
+        raise ValueError(f"velocity must be (T,Nx,Ny,Nz,3), got {velocity.shape}")
+    mask3 = as_spatial_mask(mask, velocity.shape[1:4])
+    if not mask3.any():
+        raise ValueError("mask is empty")
+    v_t = velocity[:, mask3, :].mean(axis=1)
+    v_t = v_t - v_t.mean(axis=0, keepdims=True)
+    spec = np.fft.rfft(v_t, axis=0)
+    power = np.square(np.abs(spec)).sum(axis=1)
+    ac = float(power[1:].sum())
+    if ac < 1e-16:
+        return 0.0
+    hi = min(int(max_harmonic), int(power.size) - 1)
+    if hi < 1:
+        return 0.0
+    return float(power[1:hi + 1].sum()) / ac
+
+
 def jet_remainder_mask(
     velocity: np.ndarray,
     cavity: np.ndarray,
@@ -237,9 +316,12 @@ def evaluate_osu_gate(
     times: Sequence[float],
     *,
     lv_mask: Optional[np.ndarray] = None,
+    tissue_mask: Optional[np.ndarray] = None,
     aorta_mask: Optional[np.ndarray] = None,
     aao_plane_mask: Optional[np.ndarray] = None,
     aao_normal: Optional[Sequence[float]] = None,
+    mv_plane_mask: Optional[np.ndarray] = None,
+    mv_normal: Optional[Sequence[float]] = None,
     mask_is_lv: bool = False,
     persist_frac: float = JET_PERSIST_FRAC,
 ) -> Dict:
@@ -247,7 +329,11 @@ def evaluate_osu_gate(
 
     ``eval_mask`` should be the whole-heart (magnitude) cavity so the jet
     location check can see aorta contamination. An LV-only packed volume
-    cannot fail check 3 unless ``aorta_mask`` overlaps that volume.
+    cannot fail ``jet_chamber`` unless ``aorta_mask`` overlaps that volume.
+
+    ``tissue_mask`` is a static-tissue ROI (chest-wall muscle). It is
+    required to pass ``lv_vs_tissue``. ``mv_plane_mask`` is a thin mitral
+    plane for ``valve_balance``.
     """
     velocity = np.asarray(velocity, dtype=np.float64)
     grid = velocity.shape[1:4]
@@ -264,42 +350,124 @@ def evaluate_osu_gate(
     else:
         mask_is_lv = False
 
+    tissue3 = (as_spatial_mask(tissue_mask, grid)
+               if tissue_mask is not None else None)
+    if tissue3 is not None and lv3 is not None:
+        tissue3 = tissue3 & ~lv3
+
     ao3 = as_spatial_mask(aorta_mask, grid) if aorta_mask is not None else None
     aao3 = (as_spatial_mask(aao_plane_mask, grid)
             if aao_plane_mask is not None else ao3)
+    mv3 = (as_spatial_mask(mv_plane_mask, grid)
+           if mv_plane_mask is not None else None)
 
     p99_mask = lv3 if mask_is_lv and lv3 is not None else eval3
     stasis = volume_stasis_report(
         velocity, p99_mask, spacing, speed_thresh=JET_SPEED_THRESH,
         persist_frac=persist_frac, absolute=True)
-    p99 = float(stasis["speed_p99"])
-    if p99 < SPEED_P99_MIN_MPS:
-        p99_check = {
-            "verdict": "fail",
-            "value": p99,
-            "min": SPEED_P99_MIN_MPS,
-            "on_lv": bool(mask_is_lv),
-            "detail": f"speed_p99 {p99:.4f} m/s < 0.10 m/s",
-        }
-    elif not mask_is_lv:
-        p99_check = {
+    legacy_p99 = float(stasis["speed_p99"])
+
+    lv_rms = None
+    tissue_rms = None
+    ratio = None
+    if mask_is_lv and lv3 is not None:
+        lv_rms = masked_rms_speed_median(velocity, lv3)
+    if tissue3 is not None and tissue3.any():
+        tissue_rms = masked_rms_speed_median(velocity, tissue3)
+    if lv_rms is not None and tissue_rms is not None:
+        ratio = lv_rms / max(tissue_rms, 1e-12)
+
+    if not mask_is_lv or lv3 is None:
+        tissue_check = {
             "verdict": "pending",
-            "value": p99,
-            "min": SPEED_P99_MIN_MPS,
+            "lv_rms_mps": lv_rms,
+            "tissue_rms_mps": tissue_rms,
+            "ratio": ratio,
+            "min_ratio": LV_TISSUE_RATIO_MIN,
+            "legacy_speed_p99": legacy_p99,
             "on_lv": False,
             "detail": (
-                f"speed_p99 {p99:.4f} m/s is on a magnitude placeholder; "
-                "dataset #11 Aao ~180 cm/s will clear 10 cm/s without an LV jet"
+                f"legacy_speed_p99 {legacy_p99:.4f} m/s is on a magnitude "
+                "placeholder; the retired 10 cm/s cut cannot fail on noise"
+            ),
+        }
+    elif tissue3 is None or not tissue3.any():
+        tissue_check = {
+            "verdict": "pending",
+            "lv_rms_mps": lv_rms,
+            "tissue_rms_mps": None,
+            "ratio": None,
+            "min_ratio": LV_TISSUE_RATIO_MIN,
+            "legacy_speed_p99": legacy_p99,
+            "on_lv": True,
+            "detail": (
+                f"LV time-RMS median {lv_rms:.4f} m/s; need a static-tissue "
+                "ROI (chest-wall muscle) as the noise floor"
+            ),
+        }
+    elif ratio < LV_TISSUE_RATIO_MIN:
+        tissue_check = {
+            "verdict": "fail",
+            "lv_rms_mps": lv_rms,
+            "tissue_rms_mps": tissue_rms,
+            "ratio": ratio,
+            "min_ratio": LV_TISSUE_RATIO_MIN,
+            "legacy_speed_p99": legacy_p99,
+            "on_lv": True,
+            "detail": (
+                f"LV time-RMS {lv_rms:.4f} / tissue {tissue_rms:.4f} "
+                f"= {ratio:.2f} < {LV_TISSUE_RATIO_MIN:.1f}× "
+                f"(legacy p99 {legacy_p99:.4f} m/s, not a cut)"
             ),
         }
     else:
-        p99_check = {
+        tissue_check = {
             "verdict": "pass",
-            "value": p99,
-            "min": SPEED_P99_MIN_MPS,
+            "lv_rms_mps": lv_rms,
+            "tissue_rms_mps": tissue_rms,
+            "ratio": ratio,
+            "min_ratio": LV_TISSUE_RATIO_MIN,
+            "legacy_speed_p99": legacy_p99,
             "on_lv": True,
-            "detail": f"speed_p99 {p99:.4f} m/s on LV mask",
+            "detail": (
+                f"LV time-RMS {lv_rms:.4f} / tissue {tissue_rms:.4f} "
+                f"= {ratio:.2f} ≥ {LV_TISSUE_RATIO_MIN:.1f}×"
+            ),
         }
+
+    if not mask_is_lv or lv3 is None:
+        fourier_check = {
+            "verdict": "pending",
+            "low_frac": None,
+            "min_frac": FOURIER_LOW_FRAC_MIN,
+            "harmonics": FOURIER_LOW_HARMONICS,
+            "detail": "need an LV mask for the temporal Fourier check",
+        }
+    else:
+        low_frac = temporal_low_harmonic_frac(velocity, lv3)
+        if low_frac < FOURIER_LOW_FRAC_MIN:
+            fourier_check = {
+                "verdict": "fail",
+                "low_frac": low_frac,
+                "min_frac": FOURIER_LOW_FRAC_MIN,
+                "harmonics": FOURIER_LOW_HARMONICS,
+                "detail": (
+                    f"harmonics 1–{FOURIER_LOW_HARMONICS} hold {low_frac:.2f} "
+                    f"of AC power (< {FOURIER_LOW_FRAC_MIN:.2f}; "
+                    "flat/DC is noise, not a cardiac waveform)"
+                ),
+            }
+        else:
+            fourier_check = {
+                "verdict": "pass",
+                "low_frac": low_frac,
+                "min_frac": FOURIER_LOW_FRAC_MIN,
+                "harmonics": FOURIER_LOW_HARMONICS,
+                "detail": (
+                    f"harmonics 1–{FOURIER_LOW_HARMONICS} hold {low_frac:.2f} "
+                    f"of AC power (≥ {FOURIER_LOW_FRAC_MIN:.2f})"
+                ),
+            }
 
     sv_ml = None
     if aao3 is not None:
@@ -336,6 +504,47 @@ def evaluate_osu_gate(
             "rel_tol": AAO_SV_REL_TOL,
             "detail": "no Aao analysis plane — cannot check 93.6 mL/beat",
         }
+
+    sv_mv = None
+    if mv3 is not None:
+        sv_mv = plane_stroke_volume_ml(
+            velocity, mv3, spacing, times, normal=mv_normal)
+    if sv_ml is None or sv_mv is None:
+        valve_check = {
+            "verdict": "pending",
+            "aao_ml": sv_ml,
+            "mv_ml": sv_mv,
+            "rel_err": None,
+            "rel_tol": VALVE_SV_REL_TOL,
+            "detail": "need both a mitral plane and an Aao plane for SV balance",
+        }
+    else:
+        denom = max(abs(sv_ml), abs(sv_mv), 1e-12)
+        valve_rel = abs(abs(sv_mv) - abs(sv_ml)) / denom
+        if valve_rel > VALVE_SV_REL_TOL:
+            valve_check = {
+                "verdict": "fail",
+                "aao_ml": sv_ml,
+                "mv_ml": sv_mv,
+                "rel_err": valve_rel,
+                "rel_tol": VALVE_SV_REL_TOL,
+                "detail": (
+                    f"|MV {sv_mv:.1f} − Aao {sv_ml:.1f}| / max "
+                    f"= {valve_rel:.2f} > {VALVE_SV_REL_TOL:.2f}"
+                ),
+            }
+        else:
+            valve_check = {
+                "verdict": "pass",
+                "aao_ml": sv_ml,
+                "mv_ml": sv_mv,
+                "rel_err": valve_rel,
+                "rel_tol": VALVE_SV_REL_TOL,
+                "detail": (
+                    f"MV {sv_mv:.1f} mL vs Aao {sv_ml:.1f} mL "
+                    f"(rel {valve_rel:.2f})"
+                ),
+            }
 
     jet = jet_remainder_mask(
         velocity, eval3, speed_thresh=JET_SPEED_THRESH,
@@ -436,16 +645,36 @@ def evaluate_osu_gate(
     report = {
         "dataset": "osu_zenodo_12515230_rest11",
         "verdict": _combine((
-            p99_check["verdict"], sv_check["verdict"], jet_check["verdict"])),
+            tissue_check["verdict"], fourier_check["verdict"],
+            sv_check["verdict"], valve_check["verdict"],
+            jet_check["verdict"])),
         "mask_is_lv": bool(mask_is_lv),
         "cavity_ml_eval": float(eval3.sum()) * voxel_ml,
+        "cavity_ml_lv": float(lv3.sum()) * voxel_ml if lv3 is not None else None,
+        "cavity_ml_tissue": (
+            float(tissue3.sum()) * voxel_ml
+            if tissue3 is not None and tissue3.any() else None),
         "cavity_ml_p99": float(stasis["cavity_ml"]),
         "checks": {
-            "speed_p99": p99_check,
+            "lv_vs_tissue": tissue_check,
+            "time_consistency": fourier_check,
             "aao_sv": sv_check,
+            "valve_balance": valve_check,
             "jet_chamber": jet_check,
         },
         "thresholds": dict(THRESHOLDS),
+        "background_phase": {
+            "source": "core_outputs.theta_after_cmap",
+            "applied_in_python": False,
+            "note": (
+                "main_recon writes theta* after cmapx/y/z. Packer maps "
+                "θ/π·VENC. Residual static-tissue speed is the leftover."
+            ),
+        },
+        "units": {
+            "velocity": "m/s",
+            "qa_nifti": "display 0-1000, not cm/s",
+        },
         "notes": list(GATE_NOTES),
     }
     return _jsonable(report)
@@ -572,21 +801,47 @@ def write_osu_qa(
                 spacing, origin)
     _try_write_nifti(qa_dir / "mask_template.nii.gz", template, spacing, origin)
 
+    (qa_dir / "ORIENTATION.txt").write_text(
+        "Affine is spacing-only (identity orientation, mm). R/L/A/P/S/I\n"
+        "labels in ITK-SNAP are NOT scanner anatomy. Confirm the descending\n"
+        "aorta runs superior-inferior on the posterior-left of the heart\n"
+        "before trusting those labels.\n"
+    )
     (qa_dir / "README.txt").write_text(
-        "OSU dataset #11 QA — draw an LV cavity and an Aao analysis plane.\n"
+        "OSU dataset #11 QA — draw masks AFTER the gate-1 revision.\n"
         "Magnitude is not LV. Do not train. Do not start a thrombus solver.\n\n"
-        "ITK-SNAP: open mag_mean.nii.gz (or mag_mip / mag_4d). Walls will be\n"
-        "soft at 2.3 mm — do not freehand a publication contour. Note the\n"
-        "cursor (x,y,z) at opposite LV corners and run osu_box_mask.py.\n"
-        "A one-slice box is the Aao plane.\n"
-        "Or paint into mask_template.npy (uint8, same grid) and save as .npy.\n\n"
+        "UNITS: NIfTI peak_speed / mag_mean / mag_mip are display-scaled\n"
+        "0-1000 (1-99% stretch). They are NOT cm/s. A SNAP cursor of 576\n"
+        "is not 576 cm/s. Physical m/s stay in the sibling .npy files.\n\n"
+        "ITK-SNAP: open mag_mean.nii.gz only. HIDE peak_speed.nii.gz while\n"
+        "painting. Do not trace PC-MRA / speed-weighted edges as a wall —\n"
+        "that selects high-speed voxels and inflates LV stats. Use speed\n"
+        "or PC-MRA only to find the chamber, then draw on magnitude.\n"
+        "Walls are soft at 2.3 mm — do not freehand a publication contour.\n\n"
+        "Also draw:\n"
+        "  - static-tissue ROI (chest-wall muscle, not lung / not the box)\n"
+        "  - thin Aao analysis plane (one slice; stroke volume only)\n"
+        "  - thin mitral analysis plane (inflow; valve-balance check)\n"
+        "A one-slice box is a valve plane. Chest-wall box = tissue ROI.\n"
+        "Note cursor (x,y,z) corners and run osu_box_mask.py, or paint into\n"
+        "mask_template.npy (uint8, same grid) and save as .npy.\n\n"
+        "SAVE VERSIONED: rest_lv_mask_v1.nii.gz, then v2 if needed.\n"
+        "Do not overwrite. Do not redraw after reading the gate JSON.\n"
+        "Confirm millilitres in SNAP Segmentation → Volumes and Statistics.\n"
+        "Adult LVEDV is typically ≥ 100 mL; the discarded auto-box\n"
+        "43:60 59:69 15:37 is ~53 mL and sits anterior (likely RV / wall),\n"
+        "so it is not LV. Do not score it.\n\n"
+        "If no confident LV contour in 30-45 min, stop and send\n"
+        "docs/data/CHARITE_INQUIRY.md. Do not keep painting.\n\n"
         f"grid={tuple(grid)}  spacing_m={spacing.tolist()}\n"
         f"nifti={nifti_note}\n"
         "Then:\n"
         "  PYTHONPATH=src python3 scripts/osu_failcheap_gate.py \\\n"
         "      --volume data/osu_4dflow/rest_wholeheart.npz \\\n"
-        "      --lv-mask path/to/rest_lv_mask.nii.gz \\\n"
-        "      --aao-mask path/to/rest_aao_mask.nii.gz \\\n"
+        "      --lv-mask path/to/rest_lv_mask_v1.nii.gz \\\n"
+        "      --tissue-mask path/to/rest_tissue_mask_v1.nii.gz \\\n"
+        "      --aao-mask path/to/rest_aao_mask_v1.nii.gz \\\n"
+        "      --mv-mask path/to/rest_mv_mask_v1.nii.gz \\\n"
         "      --out docs/results/public_volume/osu_gate.json\n"
         "Optional: --aorta-region for a filled Aao/LVOT (not the thin plane).\n"
     )

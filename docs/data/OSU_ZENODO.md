@@ -21,7 +21,9 @@ a Linux copy just because PINNecho runs in a monk venv.
 
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet. Dataset #11
 Aao peak ~180 cm/s, so whole-heart `speed_p99` will clear 10 cm/s. That
-does not mean the LV has a usable jet.
+cut is **retired** (it cannot fail on noise). The gate now needs a
+static-tissue ROI, temporal Fourier consistency, Aao SV ±40 %, and
+mitral/aortic SV balance. See [`OSU_GATE.md`](../results/public_volume/OSU_GATE.md).
 
 ## Step 1 — CORe host is Windows MATLAB (not a Linux reinstall)
 
@@ -80,27 +82,38 @@ PYTHONPATH=src python3 scripts/convert_osu_core.py \
     --gate-json docs/results/public_volume/osu_gate_placeholder.json
 ```
 
-ITK-SNAP: open `mag_mean.nii.gz` first (anatomy). Affine is **mm**.
-`peak_speed.nii.gz` is magnitude-masked so air/VENC noise does not wash
-the window. Draw:
+ITK-SNAP: open `mag_mean.nii.gz` first (anatomy). Affine is **mm** and
+**spacing-only** — R/L/A/P/S/I are not scanner anatomy. NIfTI intensities
+are display-scaled 0–1000, **not cm/s**. **Hide** `peak_speed.nii.gz`
+while painting. Draw, then save as `*_v1` (never overwrite):
 
-- LV cavity → `data/osu_4dflow/rest_lv_mask.nii.gz`
+- LV cavity → `data/osu_4dflow/rest_lv_mask_v1.nii.gz`
+- static-tissue ROI (chest-wall muscle) → `rest_tissue_mask_v1.nii.gz`
 - **thin** Aao analysis plane (one slice, not the whole arch) →
-  `data/osu_4dflow/rest_aao_mask.nii.gz`
+  `data/osu_4dflow/rest_aao_mask_v1.nii.gz`
+- **thin** mitral plane → `data/osu_4dflow/rest_mv_mask_v1.nii.gz`
+
+The discarded auto-box `43:60 59:69 15:37` (~53 mL, anterior) is not LV.
+If no confident LV contour in 30–45 min, stop and send
+[`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md).
 
 ## Laptop step 4 — fail-cheap (rules locked)
 
 ```bash
 PYTHONPATH=src python3 scripts/osu_failcheap_gate.py \
     --volume data/osu_4dflow/rest_wholeheart.npz \
-    --lv-mask data/osu_4dflow/rest_lv_mask.nii.gz \
-    --aao-mask data/osu_4dflow/rest_aao_mask.nii.gz \
+    --lv-mask data/osu_4dflow/rest_lv_mask_v1.nii.gz \
+    --tissue-mask data/osu_4dflow/rest_tissue_mask_v1.nii.gz \
+    --aao-mask data/osu_4dflow/rest_aao_mask_v1.nii.gz \
+    --mv-mask data/osu_4dflow/rest_mv_mask_v1.nii.gz \
     --out docs/results/public_volume/osu_gate.json
 ```
 
-Reject if (a) Aao stroke volume relative error vs 93.6 mL/beat **> 0.40**,
-(b) LV `speed_p99` < 10 cm/s, or (c) ≥ 50 % of the 10 cm/s remainder
-lives in the aorta / LVOT, or < 50 % lives in the LV. Exact table:
+Reject if (a) LV time-RMS is < 3× the static-tissue ROI, (b) harmonics
+1–4 hold < 0.55 of AC power, (c) Aao SV relative error vs 93.6 mL/beat
+**> 0.40**, (d) mitral vs aortic SV relative error > 0.40, or (e)
+≥ 50 % of the 10 cm/s remainder lives in the aorta / LVOT, or < 50 %
+lives in the LV. Exact table:
 [`OSU_GATE.md`](../results/public_volume/OSU_GATE.md).
 
 PASS → one-seed observability later. FAIL → Charité 4D-flow request

@@ -44,12 +44,18 @@ def main() -> None:
                     help="RR interval in seconds (20 bins).")
     ap.add_argument("--mask", default=None,
                     help="LV cavity .npy/.npz/.nii.gz. Required to claim LV.")
+    ap.add_argument("--tissue-mask", default=None,
+                    help="static-tissue ROI (chest-wall muscle, not lung).")
     ap.add_argument("--aao-mask", default=None,
                     help="thin Aao analysis plane (stroke volume only).")
+    ap.add_argument("--mv-mask", default=None,
+                    help="thin mitral analysis plane (valve-balance SV).")
     ap.add_argument("--aorta-region", default=None,
                     help="optional Aao/LVOT region for jet location.")
     ap.add_argument("--aao-normal", type=float, nargs=3, default=None,
                     help="through-plane unit vector; default = mean v in plane.")
+    ap.add_argument("--mv-normal", type=float, nargs=3, default=None,
+                    help="mitral through-plane unit vector; default = mean v.")
     ap.add_argument("--mag-percentile", type=float, default=70.0,
                     help="placeholder mask on |xHat| if --mask is omitted.")
     ap.add_argument("--qa-dir", default=None,
@@ -73,9 +79,15 @@ def main() -> None:
     vol = pack_osu_public_volume(
         thetas, venc_mps=venc, spacing_m=spacing, origin_m=origin,
         period_s=args.period, mask=pack_mask, mask_is_lv=mask_is_lv)
+    tissue_mask = None
+    if args.tissue_mask:
+        tissue_mask = load_mask_any(args.tissue_mask, mag_mask.shape)
     aao_mask = None
     if args.aao_mask:
         aao_mask = load_mask_any(args.aao_mask, mag_mask.shape)
+    mv_mask = None
+    if args.mv_mask:
+        mv_mask = load_mask_any(args.mv_mask, mag_mask.shape)
     ao_region = None
     if args.aorta_region:
         ao_region = load_mask_any(args.aorta_region, mag_mask.shape)
@@ -88,8 +100,10 @@ def main() -> None:
     # Jet location uses the magnitude mask so aorta contamination is visible.
     gate = evaluate_osu_gate(
         vol["velocity"], mag_mask, vol["spacing"], vol["times"],
-        lv_mask=lv_mask, aorta_mask=ao_region, aao_plane_mask=aao_mask,
-        aao_normal=args.aao_normal, mask_is_lv=mask_is_lv)
+        lv_mask=lv_mask, tissue_mask=tissue_mask, aorta_mask=ao_region,
+        aao_plane_mask=aao_mask, aao_normal=args.aao_normal,
+        mv_plane_mask=mv_mask, mv_normal=args.mv_normal,
+        mask_is_lv=mask_is_lv)
 
     print(f"wrote {path}")
     print(f"  venc       {venc:.2f} m/s  (dataset #11 paper default "

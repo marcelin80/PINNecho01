@@ -10,7 +10,11 @@ plane) and threshold inside that box.
         --volume data/osu_4dflow/rest_wholeheart.npz \\
         --box 20:45 35:70 25:50 \\
         --percentile 55 \\
-        --out data/osu_4dflow/rest_lv_mask.nii.gz
+        --out data/osu_4dflow/rest_lv_mask_v1.nii.gz
+
+Hide peak_speed when choosing the box. Prefer mag_mean.npy.
+Save v1 / v2; do not overwrite after seeing gate scores.
+The discarded auto-box 43:60 59:69 15:37 (~53 mL, anterior) is not LV.
 """
 
 import _bootstrap  # noqa: F401
@@ -60,6 +64,8 @@ def main() -> None:
     print(f"  box         {args.box}  percentile={args.percentile:g}")
     print(f"  voxels      {int(mask.sum())}  ~{ml:.1f} mL")
     print("  this is a coarse cavity, not an LV wall. inspect in ITK-SNAP.")
+    print("  adult LVEDV is typically ≥ 100 mL; a ~53 mL anterior box is not LV.")
+    print("  save as *_v1 / *_v2. hide peak_speed while choosing the box.")
 
 
 if __name__ == "__main__":

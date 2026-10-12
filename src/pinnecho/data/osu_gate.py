@@ -480,8 +480,12 @@ def write_osu_qa(
     np.save(qa_dir / "peak_speed.npy", peak)
     template = np.zeros(grid, dtype=np.uint8)
     np.save(qa_dir / "mask_template.npy", template)
+    peak_draw = peak
     if mask is not None:
-        np.save(qa_dir / "eval_mask.npy", as_spatial_mask(mask, grid).astype(np.uint8))
+        mask3 = as_spatial_mask(mask, grid)
+        np.save(qa_dir / "eval_mask.npy", mask3.astype(np.uint8))
+        # Air/noise hits VENC·√3 and washes ITK-SNAP contrast. Draw on the mask.
+        peak_draw = np.where(mask3, peak, 0.0)
     mag_mean = None
     if mag is not None:
         mag = np.asarray(mag)
@@ -497,13 +501,14 @@ def write_osu_qa(
             mag_mean = np.abs(mag)
         np.save(qa_dir / "mag_mean.npy", mag_mean)
 
-    _write_mid_slices(qa_dir / "slices_peak.png", peak, title="peak |u| (m/s)")
+    _write_mid_slices(qa_dir / "slices_peak.png", peak_draw, title="peak |u| (m/s, masked)")
     if mag_mean is not None:
         _write_mid_slices(qa_dir / "slices_mag.png", mag_mean, title="mean |xHat|")
 
     spacing = np.asarray(spacing_m, dtype=np.float64).reshape(3)
     origin = np.asarray(origin_m, dtype=np.float64).reshape(3)
-    nifti_note = _try_write_nifti(qa_dir / "peak_speed.nii.gz", peak, spacing, origin)
+    # ITK-SNAP expects the NIfTI affine in millimetres, not metres.
+    nifti_note = _try_write_nifti(qa_dir / "peak_speed.nii.gz", peak_draw, spacing, origin)
     if mag_mean is not None:
         _try_write_nifti(qa_dir / "mag_mean.nii.gz", mag_mean, spacing, origin)
     _try_write_nifti(qa_dir / "mask_template.nii.gz", template, spacing, origin)
@@ -511,7 +516,9 @@ def write_osu_qa(
     (qa_dir / "README.txt").write_text(
         "OSU dataset #11 QA — draw an LV cavity and an Aao analysis plane.\n"
         "Magnitude is not LV. Do not train. Do not start a thrombus solver.\n\n"
-        "ITK-SNAP / 3D Slicer: open peak_speed.nii.gz (or mag_mean.nii.gz),\n"
+        "ITK-SNAP: open mag_mean.nii.gz first (anatomy). Add peak_speed.nii.gz\n"
+        "as a separate image. Affine is millimetres. peak_speed is magnitude-\n"
+        "masked so air/VENC noise does not wash the contrast.\n"
         "save LV as rest_lv_mask.nii.gz and a thin Aao plane as "
         "rest_aao_mask.nii.gz.\n"
         "Or paint into mask_template.npy (uint8, same grid) and save as .npy.\n\n"
@@ -559,10 +566,14 @@ def _try_write_nifti(path: Path, array: np.ndarray, spacing_m, origin_m) -> str:
         import nibabel as nib  # type: ignore
     except ImportError:
         return "skipped (pip install nibabel for ITK-SNAP)"
+    spacing_mm = np.asarray(spacing_m, dtype=np.float64).reshape(3) * 1000.0
+    origin_mm = np.asarray(origin_m, dtype=np.float64).reshape(3) * 1000.0
     aff = np.eye(4)
-    aff[0, 0], aff[1, 1], aff[2, 2] = np.asarray(spacing_m, dtype=np.float64)
-    aff[:3, 3] = np.asarray(origin_m, dtype=np.float64)
-    nib.save(nib.Nifti1Image(np.asarray(array), aff), str(path))
+    aff[0, 0], aff[1, 1], aff[2, 2] = spacing_mm
+    aff[:3, 3] = origin_mm
+    img = nib.Nifti1Image(np.asarray(array, dtype=np.float32), aff)
+    img.header.set_xyzt_units(xyz="mm")
+    nib.save(img, str(path))
     return str(path.name)
 
 

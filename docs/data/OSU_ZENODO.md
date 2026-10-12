@@ -80,9 +80,9 @@ PYTHONPATH=src python3 scripts/convert_osu_core.py \
     --gate-json docs/results/public_volume/osu_gate_placeholder.json
 ```
 
-ITK-SNAP / 3D Slicer: open `data/osu_4dflow/qa/peak_speed.nii.gz`
-(needs `pip install nibabel` for the `.nii.gz`; PNGs and `.npy` are
-always written). Draw:
+ITK-SNAP: open `mag_mean.nii.gz` first (anatomy). Affine is **mm**.
+`peak_speed.nii.gz` is magnitude-masked so air/VENC noise does not wash
+the window. Draw:
 
 - LV cavity → `data/osu_4dflow/rest_lv_mask.nii.gz`
 - **thin** Aao analysis plane (one slice, not the whole arch) →

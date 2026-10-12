@@ -12,76 +12,99 @@ measured 3-component volume. One rest subject (dataset #11 is a
 | First file | `4D_Flow_Cartesian_Dataset_11.mat` (807 MB, md5 `7a0466a6f173590990d827350c0b34df`) |
 | VENC | **200 cm/s** (paper Fig. 4, dataset #11) |
 | FOV | whole heart + aortic arch. Spatial res. Study IV: 2.3–3.1 mm |
+| Fail-cheap | [`OSU_GATE.md`](../results/public_volume/OSU_GATE.md) (rules locked) |
 
 The `.mat` is self-gated expiratory **k-space**, 20 cardiac bins — not a
 velocity NPZ. Do **not** download the 5.1 GB cine first. Do **not**
-rewrite CORe in Python. If MATLAB ≥ 2019 is missing, **stop**.
+rewrite CORe in Python. MATLAB ≥ 2019 can be **Windows**. Do not install
+a Linux copy just because PINNecho runs in a monk venv.
 
 Paper check is **ascending aorta vs 2D-PC**, not an LV jet. Dataset #11
-Aao peak ~180 cm/s, so `speed_p99` will clear 10 cm/s. That does not
-mean the LV has a usable jet.
+Aao peak ~180 cm/s, so whole-heart `speed_p99` will clear 10 cm/s. That
+does not mean the LV has a usable jet.
 
-## Laptop step 1 — MATLAB check, then download + clone
+## Step 1 — CORe host is Windows MATLAB (not a Linux reinstall)
 
-```bash
-# stop here if this prints nothing
-command -v matlab || echo "NO MATLAB — do not rewrite CORe"
+monk PATH has no `matlab`. The PINNecho venv does not need one.
+Install Linux MATLAB only if the Windows copy is missing, older than
+R2019, or you cannot boot/reach that machine. Octave is not a substitute.
 
-cd ~/PINNecho01
-mkdir -p data/osu_4dflow
-cd data/osu_4dflow
+On **Windows** (PowerShell). md5 must match before `main_recon`.
 
-curl -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat \
+```powershell
+mkdir $HOME\PINNecho01-osu -Force | Out-Null
+cd $HOME\PINNecho01-osu
+curl.exe -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat `
   "https://zenodo.org/api/records/12515230/files/4D_Flow_Cartesian_Dataset_11.mat/content"
-md5sum 4D_Flow_Cartesian_Dataset_11.mat
-# expect 7a0466a6f173590990d827350c0b34df
-
-git clone --depth 1 https://github.com/OSU-MR/motion-robust-CMR.git
+Get-FileHash 4D_Flow_Cartesian_Dataset_11.mat -Algorithm MD5
+# expect 7A0466A6F173590990D827350C0B34DF
+# Windows often has no git — zip is enough
+curl.exe -L --fail -o motion-robust-CMR.zip `
+  "https://github.com/OSU-MR/motion-robust-CMR/archive/refs/heads/main.zip"
+Expand-Archive -Force motion-robust-CMR.zip -DestinationPath .
 ```
 
 Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
 
-## Laptop step 2 — CORe only (skip CS)
+## Step 2 — CORe only on Windows (skip CS)
 
 ```matlab
-cd('.../motion-robust-CMR/3D cine-4D flow MRI Reconstruction (Study III IV V)')
-% in main_recon.m set:  recon = ["core"];   opt.use_gpu = 1 if NVIDIA
+% Current Folder MUST be this Study III–V directory (else datestr8601 is missing)
+cd('C:\Users\marce\PINNecho01-osu\motion-robust-CMR-main\3D cine-4D flow MRI Reconstruction (Study III IV V)')
+assert(exist('functions/datestr8601.m','file')==2, 'cd to the Study III-V folder first')
+% edit main_recon.m line ~56:  recon=["cs","core"];  →  recon=["core"];
+% this Windows MATLAB has no Parallel Computing Toolbox → opt.use_gpu = 0
 main_recon
-% prompts: save name (e.g. rest11); flow=1; rest=1;
-% then pick 4D_Flow_Cartesian_Dataset_11.mat
+% prompts: name rest4d (or rest11);  flow=1;  rest=1;
+% file picker: C:\Users\marce\PINNecho01-osu\4D_Flow_Cartesian_Dataset_11.mat
 ```
 
 Paper wall-clock ~11 min (GPU). Output:
 `outputs.thetaX/Y/Z` (phase, **not** m/s) and `outputs.xHat`.
 Saved as `<saveName>_<date>_core/<saveName>_<date>_core.mat`.
+Copy **that** file to monk (`~/PINNecho01/data/osu_4dflow/`). The 807 MB
+k-space can stay on Windows.
 
-## Step 3–4 — pack SI volume (after recon exists)
+## Laptop step 3 — pack whole-heart + QA on monk (no LV claim)
 
 `--mask` must be an LV cavity. A magnitude percentile is a placeholder
-and **fails** the LV gate until a real cavity is drawn.
+and leaves the gate **PENDING**.
 
 ```bash
 PYTHONPATH=src python3 scripts/convert_osu_core.py \
     --recon path/to/rest11_*_core.mat \
     --spacing-mm 2.3 2.3 2.7 \
     --venc-cm-s 200 \
-    --out data/osu_4dflow/rest_wholeheart.npz
-
-# after an LV mask exists
-PYTHONPATH=src python3 scripts/public_volume_stasis.py \
-    --volume data/osu_4dflow/rest_lv.npz \
-    --absolute --speed-thresh 0.10 \
-    --cuts 0.05 0.10 0.15 \
-    --out docs/results/public_volume/osu_stasis_gt.json
+    --out data/osu_4dflow/rest_wholeheart.npz \
+    --qa-dir data/osu_4dflow/qa \
+    --gate-json docs/results/public_volume/osu_gate_placeholder.json
 ```
 
-## Step 5 — fail cheap
+ITK-SNAP: open `mag_mean.nii.gz` first (anatomy). Affine is **mm**.
+`peak_speed.nii.gz` is magnitude-masked so air/VENC noise does not wash
+the window. Draw:
 
-Reject if (a) Aao stroke volume is nonsense vs the paper’s 2D-PC
-(dataset #11 ref 93.6 mL/beat), (b) `speed_p99` < 10 cm/s, or (c) the
-10 cm/s remainder lives in the aorta / LVOT, not the LV chamber.
-Pass → one-seed observability later. Fail → Charité 4D-flow request
+- LV cavity → `data/osu_4dflow/rest_lv_mask.nii.gz`
+- **thin** Aao analysis plane (one slice, not the whole arch) →
+  `data/osu_4dflow/rest_aao_mask.nii.gz`
+
+## Laptop step 4 — fail-cheap (rules locked)
+
+```bash
+PYTHONPATH=src python3 scripts/osu_failcheap_gate.py \
+    --volume data/osu_4dflow/rest_wholeheart.npz \
+    --lv-mask data/osu_4dflow/rest_lv_mask.nii.gz \
+    --aao-mask data/osu_4dflow/rest_aao_mask.nii.gz \
+    --out docs/results/public_volume/osu_gate.json
+```
+
+Reject if (a) Aao stroke volume relative error vs 93.6 mL/beat **> 0.40**,
+(b) LV `speed_p99` < 10 cm/s, or (c) ≥ 50 % of the 10 cm/s remainder
+lives in the aorta / LVOT, or < 50 % lives in the LV. Exact table:
+[`OSU_GATE.md`](../results/public_volume/OSU_GATE.md).
+
+PASS → one-seed observability later. FAIL → Charité 4D-flow request
 ([`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md)), **not** CFD.
 
-Wall motion from the 5.1 GB cine is **after** step 5 passes. Still not
+Wall motion from the 5.1 GB cine is **after** step 4 passes. Still not
 an IBFE oracle and not a thrombus.

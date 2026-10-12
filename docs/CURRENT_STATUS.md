@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-12 · 브랜치 `cursor/osu-gate-noise-floor-935e` · Corrado 동결, OSU 팩 PENDING, **게이트 1 개정** (p99 폐기), 마스크는 그 다음
+> 2026-10-12 · 브랜치 `cursor/duplex-scope-935e` · Corrado 동결, OSU 게이트 1 개정, DUPLEX는 열화 프로브로만 범위 잠금 (볼륨 대체 아님)
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -36,6 +36,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
 | OSU rest 4D-flow (#11) | **팩 PENDING, 게이트 1 개정** | (20,77,96,72). 폐기: LV p99≥10 cm/s (잡음만으로 통과). 대체: 조직 3× time-RMS, 푸리에 1–4 ≥0.55, Aao±40%, 승모/대동맥 SV 균형, jet_chamber. 자동박스 43:60 59:69 15:37은 LV 아님. |
+| DUPLEX (CREATIS 합성 듀플렉스) | **범위만 잠금** | 창 수·제트 mL 불가. 공개 `.mat`에 CFD 2성분 정답 없음. 저자 파일이 오기 전 PINN 학습 금지. [`DUPLEX.md`](data/DUPLEX.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---
@@ -133,6 +134,7 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 3. **그다음: `mag_mean`만 보고** (peak_speed 숨김) 버전된 LV·조직·Aao·승모 마스크. 자동박스는 채점 금지. 30–45분에 윤곽이 안 나오면 중단.
 4. **Charité는 문의만** — 윈도우 CORe 불가, 개정 게이트 FAIL, 또는 30–45분 후. CFD 금지.
 5. **혈전 솔버는 아직 아님.**
+6. **DUPLEX는 볼륨 대체가 아니다.** 이상적 스냅샷 대비 시뮬 열화만. 공개 파일에 벡터 GT가 없으면 학습하지 말 것.
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
@@ -186,3 +188,4 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md) | OSU #11: 윈도우 CORe → monk 팩 |
 | [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 5항목 (p99 폐기, 조직·푸리에·판막 균형 잠금) |
 | [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (윈도우 CORe 불가/게이트 FAIL 뒤, CFD 금지) |
+| [`data/DUPLEX.md`](data/DUPLEX.md) | CREATIS 합성 듀플렉스: 열화 프로브, 창/제트 mL 불가, 공개 mat에 CFD 벡터 없음 |

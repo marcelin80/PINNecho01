@@ -125,12 +125,12 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 ## 5. 지금 열린 일 (우선순위)
 
 1. **샘플링 레버·σ=1 블러는 닫힘.** A/B/블러 다시 돌리지 말 것.
-2. **C** `--n-windows 1`, 같은 `n_data=3072`. “창이 제트를 지킨다”는 아직 가설. 창 레버를 논문에 안 쓰면 생략하고 Corrado를 동결해도 된다.
+2. **지금: C** `--n-windows 1`, `n_data=3072` 고정, 시드 0/1/2. “창이 제트를 지킨다”를 3시드로 닫거나 기각한다. `n_data`가 고정이라 창당 점 수 교란이 남는다.
 3. **D** (`n_data × windows`)는 창 레버를 논문에 쓸 때만.
-4. **Corrado 동결** (창 주장을 안 하면 지금). 혈전 솔버는 아직 아님.
-5. **다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
+4. **C 다음 Corrado 동결.** 혈전 솔버는 아직 아님.
+5. **그다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
 
-명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A와 B는 다시 돌리지 말 것.
+명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A·B·블러 σ=1은 다시 돌리지 말 것.
 
 ### 환자 LV 4D-flow
 

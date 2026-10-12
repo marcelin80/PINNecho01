@@ -109,12 +109,33 @@ Do not rerun B. Do not adopt on the 10 cm/s millilitre recovery.
 
 “Windows protect the jet” is still a hypothesis until C exists.
 
+## C — 1-window 3-seed (run next)
+
+Same `n_data=3072`, no `--fast-frac`, `--n-windows 1`, seeds 0/1/2,
+cuts 5/10/15. One-seed reference: 10 cm/s 23.7 mL (1w) vs 26.2 (3w).
+
+`n_data` is **fixed**, so 1-window has ~3× the per-window Doppler rows
+of A. That confound stays.
+
+**Read C before seeing it:**
+
+- If 1-window 10 cm/s `signed_jet_err` is worse than A on all 3 seeds
+  *despite* more points per window, extra windows help the jet even
+  under dilution.
+- If 1-window is better, that may just be the per-window budget. Do
+  **not** claim “3 windows hurt.” Only D (`n_data × windows`) can
+  separate dilution from a real window effect.
+- Do not quote 5 cm/s or persist Dice. Report 15 cm/s, precision,
+  slow-region, peak ratio the same as B.
+
+After C, freeze Corrado unless the window lever goes in a paper (then D).
+
 ## Commands
 
 Do not overwrite `stasis_recon.json`. Do not rerun A, B, or blur-σ=1.
 
 ```bash
-# blur-GT (no train) — run before or beside B
+# blur-GT (no train) — recorded; do not rerun
 PYTHONPATH=src python3 scripts/public_volume_stasis.py \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
     --blur-sigma 1.0 --cuts 0.05 0.10 0.15 \
@@ -133,7 +154,7 @@ PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
     --fast-frac 0.5 \
     --out docs/results/public_volume/stasis_recon_fastfrac_seeds.json
 
-# C. 1-window, same n_data=3072, same seeds / cuts (window hypothesis)
+# C. 1-window, same n_data=3072, same seeds / cuts — run this next
 PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
     --steps 2000 --n-windows 1 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \

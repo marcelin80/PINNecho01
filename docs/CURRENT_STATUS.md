@@ -35,7 +35,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
-| OSU rest 4D-flow (#11) | **팩 PENDING** | (20,77,96,72,3), 2.3×2.3×2.7 mm. placeholder p99 0.353 m/s, 10 cm/s 나머지 470 mL(전심장, LV 아님). LV·Aao 마스크 다음. |
+| OSU rest 4D-flow (#11) | **팩 PENDING** | (20,77,96,72). placeholder p99 0.35 m/s. unmasked max 3.44 m/s = VENC√3 잡음. QA NIfTI 있음. LV·Aao 다음. |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---

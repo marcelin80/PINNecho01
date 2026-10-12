@@ -72,5 +72,10 @@ PASS.
 | whole-heart 10 cm/s remainder | **469.85 mL** — not an LV jet |
 
 Paper Aao peak is ~180 cm/s. Whole-heart p99 is not that number. Do not
-fail or adopt from this row. Next is LV + thin Aao masks, then
+fail or adopt from this row.
+
+Unmasked `max=3.44` m/s, `p999=3.15` m/s. That is VENC·√3 ≈ 3.46
+(three components near ±2 m/s), i.e. low-magnitude phase noise, not a
+344 cm/s jet. The magnitude mask already dropped that tail
+(placeholder p99 0.35 m/s). Next is LV + thin Aao masks, then
 `osu_failcheap_gate`.

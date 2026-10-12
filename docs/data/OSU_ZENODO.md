@@ -53,7 +53,7 @@ Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
 cd('C:\Users\marce\PINNecho01-osu\motion-robust-CMR-main\3D cine-4D flow MRI Reconstruction (Study III IV V)')
 assert(exist('functions/datestr8601.m','file')==2, 'cd to the Study III-V folder first')
 % edit main_recon.m line ~56:  recon=["cs","core"];  →  recon=["core"];
-% default opt.use_gpu=1; set 0 if this Windows box has no NVIDIA
+% this Windows MATLAB has no Parallel Computing Toolbox → opt.use_gpu = 0
 main_recon
 % prompts: name rest4d (or rest11);  flow=1;  rest=1;
 % file picker: C:\Users\marce\PINNecho01-osu\4D_Flow_Cartesian_Dataset_11.mat

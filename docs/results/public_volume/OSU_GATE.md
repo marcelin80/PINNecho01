@@ -45,7 +45,13 @@ PYTHONPATH=src python3 scripts/convert_osu_core.py \
     --qa-dir data/osu_4dflow/qa \
     --gate-json docs/results/public_volume/osu_gate_placeholder.json
 
-# 2. draw LV cavity + a *thin* Aao plane on peak_speed.nii.gz (ITK-SNAP)
+# 2. do not freehand a wall. Note SNAP cursor corners, then:
+#    PYTHONPATH=src python3 scripts/osu_box_mask.py \
+#        --image data/osu_4dflow/qa/mag_mean.npy \
+#        --volume data/osu_4dflow/rest_wholeheart.npz \
+#        --box X0:X1 Y0:Y1 Z0:Z1 --percentile 55 \
+#        --out data/osu_4dflow/rest_lv_mask.nii.gz
+#    A one-slice box is the Aao plane.
 
 # 3. score the three checks
 PYTHONPATH=src python3 scripts/osu_failcheap_gate.py \

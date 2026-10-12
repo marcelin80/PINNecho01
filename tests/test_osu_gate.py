@@ -9,8 +9,9 @@ import pytest
 from pinnecho.data.osu_core import pack_osu_public_volume
 from pinnecho.data.osu_gate import (
     AAO_SV_REL_TOL, DATASET11_AAO_SV_ML, analysis_plane_mask,
-    evaluate_osu_gate, format_osu_gate, jet_remainder_mask,
-    plane_stroke_volume_ml, write_gate_json, write_osu_qa,
+    box_threshold_mask, evaluate_osu_gate, format_osu_gate,
+    jet_remainder_mask, parse_index_span, plane_stroke_volume_ml,
+    write_gate_json, write_osu_qa,
 )
 
 
@@ -181,6 +182,24 @@ def test_write_gate_json_and_qa(tmp_path):
     assert float(data.max()) > 100.0  # display-scaled, not raw m/s
     # Masked draw volume must not keep the unmasked VENC·√3 noise tail.
     assert float(data[~eval_mask].max()) == 0.0
+
+
+def test_parse_index_span_is_inclusive():
+    assert parse_index_span("10:12", 20) == slice(10, 13)
+
+
+def test_box_threshold_keeps_bright_core():
+    img = np.zeros((12, 12, 12))
+    img[2:4, 2:4, 2:4] = 1.0
+    img[6:10, 6:10, 6:10] = 5.0
+    m = box_threshold_mask(
+        img,
+        (slice(0, 12), slice(0, 12), slice(0, 12)),
+        percentile=50.0)
+    assert m[8, 8, 8]
+    assert not m[0, 0, 0]
+    assert not m[3, 3, 3]
+    assert int(m.sum()) == 64
 
 
 def test_sv_rel_tol_is_pre_registered():

@@ -29,6 +29,8 @@ from typing import Dict, Optional, Sequence
 
 import numpy as np
 
+from scipy.ndimage import binary_fill_holes, label as cc_label
+
 from pinnecho.eval.stasis import (
     peak_speed, persistent_stasis_mask, volume_stasis_report,
 )
@@ -463,6 +465,50 @@ def write_gate_json(path, report: Dict):
     return path
 
 
+def parse_index_span(text: str, length: int) -> slice:
+    """``'10:40'`` → inclusive SNAP cursor range as a Python slice."""
+    parts = str(text).replace("-", ":").split(":")
+    if len(parts) != 2:
+        raise ValueError(f"expected lo:hi, got {text!r}")
+    lo, hi = int(parts[0]), int(parts[1])
+    if lo > hi:
+        lo, hi = hi, lo
+    if lo < 0 or hi >= length:
+        raise ValueError(f"{text!r} outside 0..{length - 1}")
+    return slice(lo, hi + 1)
+
+
+def box_threshold_mask(
+    image: np.ndarray,
+    box_xyz,
+    *,
+    percentile: float = 55.0,
+) -> np.ndarray:
+    """Largest filled component of ``image >= p`` inside an index box.
+
+    This is a **coarse cavity**, not an endocardial segmentation. 2.3 mm
+    CORe magnitude cannot support a publication wall.
+    """
+    vol = np.asarray(image, dtype=np.float64)
+    if vol.ndim != 3:
+        raise ValueError(f"expected (Nx,Ny,Nz), got {vol.shape}")
+    sx, sy, sz = box_xyz
+    roi = vol[sx, sy, sz]
+    finite = roi[np.isfinite(roi) & (roi > 0)]
+    if finite.size == 0:
+        raise ValueError("box has no positive voxels")
+    cut = float(np.percentile(finite, percentile))
+    inside = np.zeros(vol.shape, dtype=bool)
+    inside[sx, sy, sz] = np.isfinite(roi) & (roi >= cut)
+    labeled, n = cc_label(inside)
+    if n == 0:
+        raise ValueError("no voxels above the percentile in the box")
+    counts = np.bincount(labeled.ravel())
+    counts[0] = 0
+    out = labeled == int(counts.argmax())
+    return binary_fill_holes(out)
+
+
 def write_osu_qa(
     qa_dir,
     *,
@@ -487,16 +533,18 @@ def write_osu_qa(
         # Air/noise hits VENC·√3 and washes ITK-SNAP contrast. Draw on the mask.
         peak_draw = np.where(mask3, peak, 0.0)
     mag_mean = None
+    mag_xyz_t = None
     if mag is not None:
         mag = np.asarray(mag)
+        t_len = int(velocity.shape[0])
         if mag.ndim == 4:
-            # (T,X,Y,Z) or (X,Y,Z,T) — mean over the size-matching time axis
-            if mag.shape[0] == velocity.shape[0]:
-                mag_mean = np.abs(mag).mean(axis=0)
-            elif mag.shape[-1] == velocity.shape[0]:
-                mag_mean = np.abs(mag).mean(axis=-1)
+            if mag.shape[0] == t_len:
+                mag_xyz_t = np.moveaxis(np.abs(mag), 0, -1)
+            elif mag.shape[-1] == t_len:
+                mag_xyz_t = np.abs(mag)
             else:
-                mag_mean = np.abs(mag).mean(axis=0)
+                mag_xyz_t = np.abs(mag)
+            mag_mean = mag_xyz_t.mean(axis=-1)
         else:
             mag_mean = np.abs(mag)
         np.save(qa_dir / "mag_mean.npy", mag_mean)
@@ -514,16 +562,23 @@ def write_osu_qa(
     if mag_mean is not None:
         mag_nifti = _display_scale(mag_mean, hi=1000.0)
         _try_write_nifti(qa_dir / "mag_mean.nii.gz", mag_nifti, spacing, origin)
+        if mag_xyz_t is not None:
+            mip = mag_xyz_t.max(axis=-1)
+            _try_write_nifti(
+                qa_dir / "mag_mip.nii.gz", _display_scale(mip, hi=1000.0),
+                spacing, origin)
+            _try_write_nifti(
+                qa_dir / "mag_4d.nii.gz", _display_scale(mag_xyz_t, hi=1000.0),
+                spacing, origin)
     _try_write_nifti(qa_dir / "mask_template.nii.gz", template, spacing, origin)
 
     (qa_dir / "README.txt").write_text(
         "OSU dataset #11 QA — draw an LV cavity and an Aao analysis plane.\n"
         "Magnitude is not LV. Do not train. Do not start a thrombus solver.\n\n"
-        "ITK-SNAP: open mag_mean.nii.gz first (anatomy). Add peak_speed.nii.gz\n"
-        "as a separate image. Affine is millimetres. NIfTI intensities are\n"
-        "1–99 percentile → 0–1000 for SNAP's default window. .npy are physical.\n"
-        "save LV as rest_lv_mask.nii.gz and a thin Aao plane as "
-        "rest_aao_mask.nii.gz.\n"
+        "ITK-SNAP: open mag_mean.nii.gz (or mag_mip / mag_4d). Walls will be\n"
+        "soft at 2.3 mm — do not freehand a publication contour. Note the\n"
+        "cursor (x,y,z) at opposite LV corners and run osu_box_mask.py.\n"
+        "A one-slice box is the Aao plane.\n"
         "Or paint into mask_template.npy (uint8, same grid) and save as .npy.\n\n"
         f"grid={tuple(grid)}  spacing_m={spacing.tolist()}\n"
         f"nifti={nifti_note}\n"

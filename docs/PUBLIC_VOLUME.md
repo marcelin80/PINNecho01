@@ -121,6 +121,8 @@ the 5/10/15 cm/s cuts):
 (10 cm/s 24.2–26.2 mL; 15 cm/s Dice ~0.56). B (`|v_beam|` p80) is
 recorded and **rejected**:
 [`results/public_volume/STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md).
+Blur-GT σ=1: [`results/public_volume/STASIS_BLUR_GT.md`](results/public_volume/STASIS_BLUR_GT.md)
+(15 cm/s Dice 0.760, 10 cm/s 0.911; PINN below both).
 
 ```bash
 python scripts/public_volume_stasis.py \

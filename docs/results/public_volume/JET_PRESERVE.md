@@ -67,6 +67,11 @@ PYTHONPATH=src python3 scripts/public_volume_stasis.py \
     --out docs/results/public_volume/stasis_blur_gt.json
 ```
 
+Recorded in [`STASIS_BLUR_GT.md`](STASIS_BLUR_GT.md). 15 cm/s blur Dice
+**0.760** (between the ~0.6 and ~0.9 poles). 10 cm/s blur Dice **0.911**.
+PINN A/B sit below both ceilings. Peak ratio of the blur is 0.88–0.90.
+Do not rerun.
+
 ## Peak-speed hypothesis (no train once peaks exist)
 
 Leak grows with the cut (A, signed): 5 cm/s −10/−7/−8 %; 10 cm/s
@@ -106,9 +111,7 @@ Do not rerun B. Do not adopt on the 10 cm/s millilitre recovery.
 
 ## Commands
 
-Do not overwrite `stasis_recon.json`. Do not rerun A or B.
-
-**Next (no train):** blur-GT. Minutes, not hours. Needs `.venv`.
+Do not overwrite `stasis_recon.json`. Do not rerun A, B, or blur-σ=1.
 
 ```bash
 # blur-GT (no train) — run before or beside B

@@ -1,70 +1,87 @@
-# Next measured volume: OSU Zenodo 12515230 (not opened)
+# Next measured volume: OSU Zenodo 12515230
 
-We have **not** downloaded or reconstructed these files. This note is from
-the paper, the Zenodo record, and the GitHub README. One rest subject +
-one stress subject. Case demonstration, not a cohort result.
+Corrado A/B/C/blur are **closed**. Do not rerun them. This is the next
+measured 3-component volume. One rest subject (dataset #11 is a
+**patient**). Case demonstration, not a cohort. CC BY 4.0.
 
 | | |
 |---|---|
-| Record | [10.5281/zenodo.12515230](https://doi.org/10.5281/zenodo.12515230) (v2, CC BY 4.0) |
-| Paper | Arshad et al., *Magn Reson Med* 2024; 92:1248–1262. [10.1002/mrm.30123](https://doi.org/10.1002/mrm.30123) |
-| Code | [OSU-MR/motion-robust-CMR](https://github.com/OSU-MR/motion-robust-CMR) (MATLAB ≥ 2019, CORe) |
-| Why first | Measured 3-component velocity after their recon. Not a CFD GT. License is clear. Fail cheap. |
+| Record | [10.5281/zenodo.12515230](https://doi.org/10.5281/zenodo.12515230) (v2) |
+| Paper | Arshad et al., *Magn Reson Med* 2024; 92:1248–1262 |
+| Code | [OSU-MR/motion-robust-CMR](https://github.com/OSU-MR/motion-robust-CMR) (MATLAB ≥ 2019) |
+| First file | `4D_Flow_Cartesian_Dataset_11.mat` (807 MB, md5 `7a0466a6f173590990d827350c0b34df`) |
+| VENC | **200 cm/s** (paper Fig. 4, dataset #11) |
+| FOV | whole heart + aortic arch. Spatial res. Study IV: 2.3–3.1 mm |
 
-Zenodo files (do **not** grab the 5.1 GB cine first):
+The `.mat` is self-gated expiratory **k-space**, 20 cardiac bins — not a
+velocity NPZ. Do **not** download the 5.1 GB cine first. Do **not**
+rewrite CORe in Python. If MATLAB ≥ 2019 is missing, **stop**.
 
-| file | size | use |
-|---|---|---|
-| `4D_Flow_Cartesian_Dataset_11.mat` | 807 MB | **rest 4D-flow, first download** |
-| `Exercise_Stress_4D Flow_Cartesian_Dataset_5.mat` | 696 MB | stress, after rest passes |
-| `3D Cine Cartesian Dataset 1.mat` | 5.1 GB | wall motion / LV mask only if rest velocity is usable |
+Paper check is **ascending aorta vs 2D-PC**, not an LV jet. Dataset #11
+Aao peak ~180 cm/s, so `speed_p99` will clear 10 cm/s. That does not
+mean the LV has a usable jet.
 
-The `.mat` files are self-gated expiratory k-space, 20 cardiac bins — **not**
-a velocity NPZ. Study IV/V live under
-`3D cine-4D flow MRI Reconstruction (Study III IV V)/` in the GitHub repo.
-Paper: recon ~11 min; FOV is **whole heart + aortic arch**
-(~1.3–2.3 mm). Quantitative check in the paper is **ascending aorta vs 2D-PC**,
-not an LV jet. LV must still be shown to sit in the volume (same trap as
-aortic-only 4D-flow).
-
-Charité (Vellguth / Wiegand phantom + volunteer 4D-flow) is **inquiry only**.
-Do not build their CFD. Draft: [`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md).
-If OSU mass-conservation / noise floor fails, ask them for the measured
-25-frame LV 4D-flow (1.96×1.96×2.8 mm) before writing a Fluent deck.
-
-## Five-step gate (half-day, rest only)
-
-Do this on the laptop that has MATLAB. Do not stop the Corrado A train.
-
-1. **Download rest k-space only** (`4D_Flow_Cartesian_Dataset_11.mat`, 807 MB)
-   plus clone `OSU-MR/motion-robust-CMR`. Cite CC BY 4.0 / Arshad 2024.
-2. **Reconstruct** with
-   `3D cine-4D flow MRI Reconstruction (Study III IV V)/main_recon.m`.
-   Prompts: save name; `flow=1`; `rest=1`; pick the rest `.mat`.
-   Use `recon=["core"]` only (skip CS) and `opt.use_gpu=1` if a GPU exists.
-   Output is `outputs.thetaX/Y/Z` (**phase**, not m/s) plus magnitude
-   `outputs.xHat`. Convert with the scan VENC. Paper wall-clock ~11 min.
-   If MATLAB ≥ 2019 is missing, stop — do not rewrite CORe in Python.
-3. **LV cavity, not aorta.** Segment or threshold a cavity mask that includes
-   the LV chamber. If the usable mask is aortic arch / LVOT only, **fail**
-   (wrong anatomy for this project, same as 4DFlowNet).
-4. **Pack SI public volume.** `velocity (T,Nx,Ny,Nz,3)` m/s, `mask`, `spacing`,
-   `origin`, `times`. `f = 0`, `p = 0`. Run
-   `scripts/public_volume_stasis.py` **without** `--train`. Record
-   `cavity_ml`, `speed_mean`, `speed_p99`, `jet_ml` at 5/10/15 cm/s.
-5. **Fail cheap.** Reject if (a) `div u` / stroke volume is nonsense against
-   the paper’s Aao 2D-PC, (b) `speed_p99` sits under 10 cm/s so the clinical
-   cut has no jet, or (c) the 10 cm/s remainder lives in the aorta, not the
-   LV. Pass → one-seed observability later. Fail → Charité 4D-flow request,
-   not CFD.
-
-Wall motion from the 5.1 GB cine is **after** step 5 passes. This is still
-not an IBFE oracle and not a thrombus study. One subject.
+## Laptop step 1 — MATLAB check, then download + clone
 
 ```bash
-# after a velocity+mask NPZ exists — no train
+# stop here if this prints nothing
+command -v matlab || echo "NO MATLAB — do not rewrite CORe"
+
+cd ~/PINNecho01
+mkdir -p data/osu_4dflow
+cd data/osu_4dflow
+
+curl -L --fail -o 4D_Flow_Cartesian_Dataset_11.mat \
+  "https://zenodo.org/api/records/12515230/files/4D_Flow_Cartesian_Dataset_11.mat/content"
+md5sum 4D_Flow_Cartesian_Dataset_11.mat
+# expect 7a0466a6f173590990d827350c0b34df
+
+git clone --depth 1 https://github.com/OSU-MR/motion-robust-CMR.git
+```
+
+Cite: Arshad et al. 2024; Zenodo 10.5281/zenodo.12515230, CC BY 4.0.
+
+## Laptop step 2 — CORe only (skip CS)
+
+```matlab
+cd('.../motion-robust-CMR/3D cine-4D flow MRI Reconstruction (Study III IV V)')
+% in main_recon.m set:  recon = ["core"];   opt.use_gpu = 1 if NVIDIA
+main_recon
+% prompts: save name (e.g. rest11); flow=1; rest=1;
+% then pick 4D_Flow_Cartesian_Dataset_11.mat
+```
+
+Paper wall-clock ~11 min (GPU). Output:
+`outputs.thetaX/Y/Z` (phase, **not** m/s) and `outputs.xHat`.
+Saved as `<saveName>_<date>_core/<saveName>_<date>_core.mat`.
+
+## Step 3–4 — pack SI volume (after recon exists)
+
+`--mask` must be an LV cavity. A magnitude percentile is a placeholder
+and **fails** the LV gate until a real cavity is drawn.
+
+```bash
+PYTHONPATH=src python3 scripts/convert_osu_core.py \
+    --recon path/to/rest11_*_core.mat \
+    --spacing-mm 2.3 2.3 2.7 \
+    --venc-cm-s 200 \
+    --out data/osu_4dflow/rest_wholeheart.npz
+
+# after an LV mask exists
 PYTHONPATH=src python3 scripts/public_volume_stasis.py \
     --volume data/osu_4dflow/rest_lv.npz \
     --absolute --speed-thresh 0.10 \
+    --cuts 0.05 0.10 0.15 \
     --out docs/results/public_volume/osu_stasis_gt.json
 ```
+
+## Step 5 — fail cheap
+
+Reject if (a) Aao stroke volume is nonsense vs the paper’s 2D-PC
+(dataset #11 ref 93.6 mL/beat), (b) `speed_p99` < 10 cm/s, or (c) the
+10 cm/s remainder lives in the aorta / LVOT, not the LV chamber.
+Pass → one-seed observability later. Fail → Charité 4D-flow request
+([`CHARITE_INQUIRY.md`](CHARITE_INQUIRY.md)), **not** CFD.
+
+Wall motion from the 5.1 GB cine is **after** step 5 passes. Still not
+an IBFE oracle and not a thrombus.

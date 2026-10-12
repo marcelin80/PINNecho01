@@ -18,6 +18,8 @@ env/
 runs/
 outputs/
 artifacts/
+data/osu_4dflow/*.mat
+data/osu_4dflow/**/*.mat
 data/generated/
 data/ibfe_example/
 *.pt

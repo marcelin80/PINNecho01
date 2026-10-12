@@ -48,8 +48,8 @@ Error growing with the cut is compatible with a constant peak-speed
 underestimate (tail clips first). That ratio is not in this file; B
 saves `*_peaks.npz` so it can be checked without a retrain.
 
-This table is **3-window only**. The 1- vs 3-window +2.5 mL contrast is
-still seed 0. Do not claim windows protect the jet until the 1-window
-3-seed pair (C) exists. B (`|v_beam|` p80 oversample) is recorded in
-[`STASIS_RECON_FASTFRAC.md`](STASIS_RECON_FASTFRAC.md): sampling lever
-**rejected**. Peak ratio ~0.80–0.88. Do not rerun A or B.
+The 1-window 3-seed pair is
+[`STASIS_RECON_W1.md`](STASIS_RECON_W1.md). 10 cm/s 23.4–24.0 mL vs
+this table 24.2–26.2 mL. B is
+[`STASIS_RECON_FASTFRAC.md`](STASIS_RECON_FASTFRAC.md) (rejected).
+Do not rerun A, B, or C.

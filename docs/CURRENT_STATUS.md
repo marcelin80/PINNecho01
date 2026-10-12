@@ -28,7 +28,8 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | Corrado LV 팬텀 변환 | 닫힘 | Day 1 PC VIPR 30 min → NPZ. 다시 변환하지 말 것. |
 | 창 1/2/3 관측성 (2000 step, 3 seed) | 닫힘 | `u` 1→2, `v` 1→3. speed 0.51 → 0.42. |
 | Eulerian 정체 GT (10 cm/s) | 닫힘 | 195 mL 공동, persist 165 mL, **제트 30.4 mL**. |
-| PINN vs GT 정체 (3-window, 3 seed) | **A 기록** | 10 cm/s 제트 24.2–26.2 mL. 15 cm/s Dice ~0.56. 1창 쌍은 없음. |
+| PINN vs GT 정체 (3-window, 3 seed) | **A 기록** | 10 cm/s 제트 24.2–26.2 mL. 15 cm/s Dice ~0.56. |
+| 1창 3시드 (C) | **기록** | 10 cm/s 23.4–24.0 mL. 창 효과는 작다. 15 cm/s는 실패. |
 | MRI vs 정합 PIV | 닫힘 | PIV FOV 73 mL는 정체 바다. **30 mL 제트는 밖.** |
 | 에코 슬랩 vs 제트 (학습 없음) | 닫힘 | A4C 73%, 다만 공동도 62%(두꺼운 슬랩). |
 | 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
@@ -72,8 +73,10 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 | 10 cm/s | 30.4 mL | **25.3 (24.2–26.2)** | **0.81** |
 | 15 cm/s | 10.8 mL | **6.3 (5.3–8.0)** | **0.56** |
 
-10 cm/s 누수 4–6 mL는 시드에 걸쳐 있다. 15 cm/s 코어가 실제로 실패한다. 5 cm/s Dice는 큰 나머지라 높아 보인다. **1창 3시드는 아직 없다.** “창이 제트를 지킨다”는 가설로 남는다.
-`w` relL2는 창이 늘면 나빠진다(0.260→0.356). 희석(고정 `n_data`)인지 최적화 트레이드오프인지는 `--scale-n-data-with-windows`로 가른다.
+10 cm/s 누수 4–6 mL는 시드에 걸쳐 있다. 15 cm/s 코어가 실제로 실패한다. 5 cm/s Dice는 큰 나머지라 높아 보인다.
+
+C 1창 3시드 ([`STASIS_RECON_W1.md`](results/public_volume/STASIS_RECON_W1.md)): 10 cm/s **23.7 mL** (−22/−21/−23 %) vs A 25.3 mL. 창당 점이 더 많은데도 1창이 세 시드 모두 나쁘다(시드 1은 거의 동률). 15 cm/s는 시드 2에서 1창이 더 낫다. 창은 10 cm/s 나머지를 조금 지키고, 코어는 살리지 못한다. `n_data` 고정 교란은 남는다. D는 창을 논문 주장으로 쓸 때만.
+`w` relL2는 창이 늘면 나빠진다(0.260→0.356). 희석인지 가리는 것도 D다.
 
 B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md)): 미리 적은 기준으로 **기각**. 15 cm/s 부호 오차 −23.3 / −31.9 / −26.1 %. 시드 1·2가 −25%를 넘는다. 10 cm/s는 28.6 mL(정밀도 0.84–0.87)로 가짜 제트가 아니고, 느린 영역 속도도 나빠지지 않았다. GT 제트 피크비 중앙값 **~0.80–0.88**. 샘플링은 접는다. 발견은 고속 코어의 체계적 과소추정이다.
 
@@ -124,13 +127,12 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **샘플링 레버·σ=1 블러는 닫힘.** A/B/블러 다시 돌리지 말 것.
-2. **지금: C** `--n-windows 1`, `n_data=3072` 고정, 시드 0/1/2. “창이 제트를 지킨다”를 3시드로 닫거나 기각한다. `n_data`가 고정이라 창당 점 수 교란이 남는다.
-3. **D** (`n_data × windows`)는 창 레버를 논문에 쓸 때만.
-4. **C 다음 Corrado 동결.** 혈전 솔버는 아직 아님.
-5. **그다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
+1. **Corrado 샘플링·창 3시드·σ=1 블러는 닫힘.** A/B/C/블러 다시 돌리지 말 것.
+2. **D** (`n_data × windows`)는 창 레버를 논문에 쓸 때만. 기본은 생략.
+3. **Corrado 동결.** 혈전 솔버는 아직 아님.
+4. **다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
 
-명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A·B·블러 σ=1은 다시 돌리지 말 것.
+명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A·B·C·블러 σ=1은 다시 돌리지 말 것.
 
 ### 환자 LV 4D-flow
 
@@ -150,6 +152,7 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 - 2000 step × 3 seed 관측성
 - GT 정체, 1-window / 3-window `--train` (균일 샘플)
 - B `--fast-frac 0.5` 3-seed
+- C `--n-windows 1` 3-seed
 - `--blur-sigma 1.0`
 - PIV 변환·겹침 비교
 - `thickness_frac = 0.12` 슬랩
@@ -173,6 +176,7 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 | [`results/public_volume/STASIS_RECON.md`](results/public_volume/STASIS_RECON.md) | 1 vs 3 window (seed 0) |
 | [`results/public_volume/STASIS_RECON_SEEDS.md`](results/public_volume/STASIS_RECON_SEEDS.md) | 3-window × 3 seed × 3 cut (A) |
 | [`results/public_volume/STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md) | B `|v_beam|` p80, 기각 |
+| [`results/public_volume/STASIS_RECON_W1.md`](results/public_volume/STASIS_RECON_W1.md) | C 1창 3시드 |
 | [`results/public_volume/STASIS_BLUR_GT.md`](results/public_volume/STASIS_BLUR_GT.md) | σ=1 블러 GT 상한 |
 | [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md) | MRI vs PIV |
 | [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md) | 에코 슬랩 |

@@ -107,9 +107,7 @@ is systematic high-speed-core underestimation.
 
 Do not rerun B. Do not adopt on the 10 cm/s millilitre recovery.
 
-“Windows protect the jet” is still a hypothesis until C exists.
-
-## C — 1-window 3-seed (run next)
+## C — 1-window 3-seed
 
 Same `n_data=3072`, no `--fast-frac`, `--n-windows 1`, seeds 0/1/2,
 cuts 5/10/15. One-seed reference: 10 cm/s 23.7 mL (1w) vs 26.2 (3w).
@@ -130,9 +128,19 @@ of A. That confound stays.
 
 After C, freeze Corrado unless the window lever goes in a paper (then D).
 
+## C outcome
+
+Recorded in [`STASIS_RECON_W1.md`](STASIS_RECON_W1.md). 10 cm/s signed
+error −22.0 / −20.9 / −22.9 % vs A −14 / −20 / −16 %. Worse on all
+three seeds (seed 1 near-tie) despite more points per window. Mean jet
+23.7 vs A 25.3 mL. 15 cm/s core still fails and is **not** uniformly
+worse on 1-window (seed 2 is better). Windows help the 10 cm/s remainder
+a little; they do not restore the high-speed core. Do not rerun C. D
+only if the window lever is a paper claim.
+
 ## Commands
 
-Do not overwrite `stasis_recon.json`. Do not rerun A, B, or blur-σ=1.
+Do not overwrite `stasis_recon.json`. Do not rerun A, B, C, or blur-σ=1.
 
 ```bash
 # blur-GT (no train) — recorded; do not rerun
@@ -154,7 +162,7 @@ PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
     --fast-frac 0.5 \
     --out docs/results/public_volume/stasis_recon_fastfrac_seeds.json
 
-# C. 1-window, same n_data=3072, same seeds / cuts — run this next
+# C. 1-window, same n_data=3072 — recorded; do not rerun
 PYTHONPATH=src python3 scripts/public_volume_stasis.py --train \
     --volume data/corrado_lv_phantom/day1_vipr_30min.npz \
     --steps 2000 --n-windows 1 --seeds 0 1 2 --cuts 0.05 0.10 0.15 \

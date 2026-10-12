@@ -67,7 +67,8 @@ the high-speed core.
 
 Blur-GT is recorded ([`STASIS_BLUR_GT.md`](STASIS_BLUR_GT.md)): 15 cm/s
 Dice cap 0.760, 10 cm/s cap 0.911. B (0.66 / 0.83) does not reach
-either. C (`--n-windows 1`) is still required before claiming that
-windows protect the jet. `|v_beam|` cannot see a cross-beam jet.
+either. C is recorded ([`STASIS_RECON_W1.md`](STASIS_RECON_W1.md)):
+1-window 10 cm/s 23.7 vs A 25.3 mL. `|v_beam|` cannot see a cross-beam
+jet.
 
 Not a thrombus.

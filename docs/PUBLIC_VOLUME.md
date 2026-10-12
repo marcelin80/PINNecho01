@@ -116,7 +116,9 @@ Echo-plane slabs vs that jet (no train):
 Jet-preserve lever (`|v_beam|` per-frame quantile, not the GT jet, not
 the 5/10/15 cm/s cuts):
 [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md).
-1- vs 3-window jet +2.5 mL is a one-seed hypothesis.
+1- vs 3-window jet is now 3-seed
+([`results/public_volume/STASIS_RECON_W1.md`](results/public_volume/STASIS_RECON_W1.md);
++1.6 mL mean at 10 cm/s).
 3-window × 3 seed: [`results/public_volume/STASIS_RECON_SEEDS.md`](results/public_volume/STASIS_RECON_SEEDS.md)
 (10 cm/s 24.2–26.2 mL; 15 cm/s Dice ~0.56). B (`|v_beam|` p80) is
 recorded and **rejected**:

@@ -92,6 +92,16 @@ A 15 cm/s signed errors: −26 / −51 / −48 %. A whole-field speed relL2:
 systematically underestimates the high-speed core. Do not invent a
 success criterion after seeing B.
 
+## B outcome: reject
+
+Recorded in [`STASIS_RECON_FASTFRAC.md`](STASIS_RECON_FASTFRAC.md).
+15 cm/s signed error −23.3 / **−31.9** / **−26.1 %** — seeds 1 and 2
+miss −25 %. Slow region and 10 cm/s precision did not fail. Peak-ratio
+median on the GT jet is **~0.80–0.88**. Sampling is folded. The finding
+is systematic high-speed-core underestimation.
+
+Do not rerun B. Do not adopt on the 10 cm/s millilitre recovery.
+
 “Windows protect the jet” is still a hypothesis until C exists.
 
 ## Commands

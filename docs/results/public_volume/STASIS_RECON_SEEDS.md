@@ -50,6 +50,6 @@ saves `*_peaks.npz` so it can be checked without a retrain.
 
 This table is **3-window only**. The 1- vs 3-window +2.5 mL contrast is
 still seed 0. Do not claim windows protect the jet until the 1-window
-3-seed pair (C) exists. `|v_beam|` oversample (B) is not in this file.
-Adopt/reject for B is pre-registered in
-[`JET_PRESERVE.md`](JET_PRESERVE.md).
+3-seed pair (C) exists. B (`|v_beam|` p80 oversample) is recorded in
+[`STASIS_RECON_FASTFRAC.md`](STASIS_RECON_FASTFRAC.md): sampling lever
+**rejected**. Peak ratio ~0.80–0.88. Do not rerun A or B.

@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-11 · 브랜치 `cursor/jet-preserve-preb-935e` (base: public-volume-stasis)
+> 2026-10-12 · 브랜치 `cursor/jet-preserve-preb-935e` (base: public-volume-stasis)
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -31,7 +31,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | PINN vs GT 정체 (3-window, 3 seed) | **A 기록** | 10 cm/s 제트 24.2–26.2 mL. 15 cm/s Dice ~0.56. 1창 쌍은 없음. |
 | MRI vs 정합 PIV | 닫힘 | PIV FOV 73 mL는 정체 바다. **30 mL 제트는 밖.** |
 | 에코 슬랩 vs 제트 (학습 없음) | 닫힘 | A4C 73%, 다만 공동도 62%(두꺼운 슬랩). |
-| 제트 보존 (`|v_beam|` oversample) | **B 전 보강됨, 아직 안 돌림** | 집합 = 프레임별 `|v_beam|` p80. 채택 기준은 `JET_PRESERVE.md`. |
+| 제트 보존 (`|v_beam|` oversample) | **B 기각** | 15 cm/s −23/−32/−26 %. 피크비 ~0.83. 샘플링 레버 접음. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
@@ -74,6 +74,8 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 10 cm/s 누수 4–6 mL는 시드에 걸쳐 있다. 15 cm/s 코어가 실제로 실패한다. 5 cm/s Dice는 큰 나머지라 높아 보인다. **1창 3시드는 아직 없다.** “창이 제트를 지킨다”는 가설로 남는다.
 `w` relL2는 창이 늘면 나빠진다(0.260→0.356). 희석(고정 `n_data`)인지 최적화 트레이드오프인지는 `--scale-n-data-with-windows`로 가른다.
 
+B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md)): 미리 적은 기준으로 **기각**. 15 cm/s 부호 오차 −23.3 / −31.9 / −26.1 %. 시드 1·2가 −25%를 넘는다. 10 cm/s는 28.6 mL(정밀도 0.84–0.87)로 가짜 제트가 아니고, 느린 영역 속도도 나빠지지 않았다. GT 제트 피크비 중앙값 **~0.80–0.88**. 샘플링은 접는다. 발견은 고속 코어의 체계적 과소추정이다.
+
 ### PIV
 
 같은 격자, `origin_delta = 0`. PIV 마스크 73 mL는 MRI 공동의 37%이고 **전부 정체 바다**다. 겹침에서 MRI 제트 0.0 mL, PIV 제트 0.016 mL. PIV는 PINN 제트를 검증할 수 없다. 자동컷 2.4 cm/s의 “제트 55 mL”는 인용 금지.
@@ -105,7 +107,7 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 
 **지금 이 재구성 필드에 혈전 생성 솔버를 붙이면 안 된다.**
 
-필요한 입력은 “공동이 대체로 느리다”가 아니라, 제트가 어디인지·어디에 오래 머무르는지다. 3-window에서도 제트가 4 mL 새고 speed relL2는 0.42다. persist Dice는 속인다. PIV는 그 제트를 못 본다. 코라도는 강체 펌프라 부전·확장 LV가 아니다.
+필요한 입력은 “공동이 대체로 느리다”가 아니라, 제트가 어디인지·어디에 오래 머무르는지다. B 이후에도 15 cm/s 코어는 23–32% 새고 피크비는 ~0.83이다. persist Dice는 속인다. PIV는 그 제트를 못 본다. 코라도는 강체 펌프라 부전·확장 LV가 아니다.
 
 연동이 가능해지려면 최소:
 
@@ -119,15 +121,14 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **B 실행 전 보강** — 코드에 들어감. 제트 = 주기의 **50% 초과** 동안 컷 이상 (`~persist`). 한 번이라도 넘은 복셀이 아님. `--fast-frac` 집합은 프레임별 `|v_beam|` **p80** (5/10/15와 독립). 지표는 부호 있는 부피 오차·정밀도·재현율·느린 영역 속도 오차·피크비. `|v_beam|`은 빔에 수직인 제트를 못 본다. `n_data=3072`는 창 수와 무관하게 고정.
-2. **학습 없이:** `--blur-sigma 1.0` (15 cm/s Dice 상한). B가 쓰는 `*_peaks.npz`로 GT 제트 피크비 (A는 배열을 안 남김, A를 다시 돌리지 말 것).
-3. **B** (`--fast-frac 0.5`, 명령 그대로). 채택은 미리 적혀 있다: 15 cm/s 부호 오차가 3시드 모두 −25% 이내이고 느린 영역이 악화하지 않으면 채택. 아니면 샘플링 레버를 접고 “고속 코어 과소추정”으로 보고.
-4. **C** `--n-windows 1`, 같은 `n_data=3072`, 다른 JSON. 그 전에는 “창이 제트를 지킨다”는 가설.
-5. **D** (`n_data × windows`)는 창 레버를 논문에 쓸 때만.
-6. **그다음 Corrado 동결.** 혈전 솔버는 아직 아님.
-7. **다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
+1. **샘플링 레버는 접음 (B 기각).** 다시 돌리지 말 것. 고속 코어 과소추정(피크비 ~0.83)이 결과다.
+2. **학습 없이:** `--blur-sigma 1.0` (15 cm/s Dice ~0.66이 해상도 상한인지). 피크 배열은 이미 있음.
+3. **C** `--n-windows 1`, 같은 `n_data=3072`. “창이 제트를 지킨다”는 아직 가설. 창 레버를 논문에 안 쓰면 생략 가능.
+4. **D** (`n_data × windows`)는 창 레버를 논문에 쓸 때만.
+5. **그다음 Corrado 동결.** 혈전 솔버는 아직 아님.
+6. **다음 측정 볼륨: OSU Zenodo 12515230.** Charité는 문의만.
 
-명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A는 다시 돌리지 말 것.
+명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md). A와 B는 다시 돌리지 말 것.
 
 ### 환자 LV 4D-flow
 
@@ -146,6 +147,7 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 
 - 2000 step × 3 seed 관측성
 - GT 정체, 1-window / 3-window `--train` (균일 샘플)
+- B `--fast-frac 0.5` 3-seed
 - PIV 변환·겹침 비교
 - `thickness_frac = 0.12` 슬랩
 - `fsi_informed` on 공개 볼륨
@@ -166,7 +168,8 @@ persist Dice ~0.96은 정체 바다(공동의 84%)다. 제트 mL은 컷이 만�
 | [`results/public_volume/CORRADO_OBSERVABILITY.md`](results/public_volume/CORRADO_OBSERVABILITY.md) | 코라도 창 스윕 |
 | [`results/public_volume/STASIS_GT.md`](results/public_volume/STASIS_GT.md) | 10 cm/s GT |
 | [`results/public_volume/STASIS_RECON.md`](results/public_volume/STASIS_RECON.md) | 1 vs 3 window (seed 0) |
-| [`results/public_volume/STASIS_RECON_SEEDS.md`](results/public_volume/STASIS_RECON_SEEDS.md) | 3-window × 3 seed × 3 cut |
+| [`results/public_volume/STASIS_RECON_SEEDS.md`](results/public_volume/STASIS_RECON_SEEDS.md) | 3-window × 3 seed × 3 cut (A) |
+| [`results/public_volume/STASIS_RECON_FASTFRAC.md`](results/public_volume/STASIS_RECON_FASTFRAC.md) | B `|v_beam|` p80, 기각 |
 | [`results/public_volume/STASIS_PIV.md`](results/public_volume/STASIS_PIV.md) | MRI vs PIV |
 | [`results/public_volume/SLAB_COVERAGE.md`](results/public_volume/SLAB_COVERAGE.md) | 에코 슬랩 |
 | [`results/public_volume/JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md) | `|v_beam|` 실험 |

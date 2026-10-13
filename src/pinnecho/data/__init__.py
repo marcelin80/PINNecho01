@@ -16,6 +16,18 @@ from .ibfe_io import (
     load_frame_vtk,
 )
 from .ibfe_validate import validate_ibfe_frames, ValidationReport
+from .ibfe_fidelity import (
+    IBFEFidelity,
+    resolve_fidelity,
+    diastole_usable,
+    isotropic_linear_scale,
+    default_pre_decision_9,
+    decision_9_approx_fidelity,
+    manufactured_fidelity,
+    public_volume_fidelity,
+    Q_CLOSE_RATIONALE,
+    V0_SCALE_ISOTROPIC,
+)
 from .ibfe_dataset import (
     make_ibfe_batch_builder,
     build_model_for_ibfe,
@@ -81,6 +93,16 @@ __all__ = [
     "load_frame_vtk",
     "validate_ibfe_frames",
     "ValidationReport",
+    "IBFEFidelity",
+    "resolve_fidelity",
+    "diastole_usable",
+    "isotropic_linear_scale",
+    "default_pre_decision_9",
+    "decision_9_approx_fidelity",
+    "manufactured_fidelity",
+    "public_volume_fidelity",
+    "Q_CLOSE_RATIONALE",
+    "V0_SCALE_ISOTROPIC",
     "make_ibfe_batch_builder",
     "build_model_for_ibfe",
     "evaluate_ibfe",

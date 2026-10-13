@@ -17,13 +17,26 @@ below and call `load_ibfe_output(path)`.
 > **Where this data comes from.** Everything PINNecho consumes here is **forward
 > FSI simulation output**, not measurement. The pipeline is: a *static* 3D CMR
 > (HVSMR-2.0, ECG-gated and motion-frozen — it supplies LV **geometry only**, with
-> a ~3 mm myocardial shell and a stress-free reference *assumed*) → `cmr4dmesh` LV
-> mesh (+ rule-based fibers) → IBAMR/IBFE forward FSI (active tension `T_a(t)` +
-> Windkessel/pressure BCs) → `IBFEFrames` export. The MRI gives **no** wall motion
-> and **no** velocity, so wall velocity, pressure, and forcing are all *simulation*
-> quantities; there is no measured velocity ground truth. The only real
-> measurement in the whole project is the final clinical **Doppler echo** the
-> reconstruction ultimately targets.
+> a ~3 mm myocardial shell) → `cmr4dmesh` LV mesh (+ rule-based fibers) →
+> IBAMR/IBFE forward FSI (active tension `T_a(t)` + Windkessel/pressure BCs) →
+> `IBFEFrames` export. The MRI gives **no** wall motion and **no** velocity, so
+> wall velocity, pressure, and forcing are all *simulation* quantities; there is
+> no measured velocity ground truth. The only real measurement in the whole
+> project is the final clinical **Doppler echo** the reconstruction ultimately
+> targets.
+>
+> **Decision 9 (locked): unstressed reference.** The image is *already loaded*.
+> Option (b) “use the image volume as V0” and (c) “record the missing fill as a
+> limitation” are rejected — they produce almost no fill, so E-wave / IVPG /
+> vortex-ring hypotheses cannot be tested. Locked path is **(a)**: build an
+> unstressed V0. Approximate first by an isotropic scale of the image mesh
+> (`(V0/V_img)^{1/3} ≈ 0.82` for the exposed Klotz 58 mL / image 105 mL
+> assumption; wall thins ~7.4 → ~6 mm — say so). Formal backward displacement
+> under `p_img` is later and is **not** implemented here. `p_img` is unknown;
+> assume mid–late diastole 5–10 mmHg and check both. **Beats exported before
+> Decision 9 is applied are systole/ejection only; diastolic filling is
+> unphysiological.** That fact is stored in `/meta/fidelity` (`_fidelity` in
+> NPZ, `fidelity:` in the manifest). See [`DECISION_9.md`](DECISION_9.md).
 
 ## Quick start
 
@@ -38,6 +51,7 @@ import torch; torch.set_default_dtype(torch.float32)
 from pinnecho.data import load_ibfe_output, validate_ibfe_frames, train_ibfe
 frames = load_ibfe_output("path/to/your/export")          # .npz, .yaml, or a dir
 print(validate_ibfe_frames(frames).summary())             # sanity-check the contract
+# Pre-Decision-9 image-IBFE: expect a diastolic-filling warning.
 model, metrics = train_ibfe(frames, backbone="fsi_informed",
                             use_traction=True, predict_scalar=True)
 print(metrics)
@@ -99,7 +113,9 @@ A single `.npz` with these keys (see `pinnecho/data/ibfe_io.py::NPZ_TENSOR_KEYS`
 coords_fluid, velocity_fluid, pressure_fluid, forcing_fluid,
 coords_wall, normals_wall, velocity_wall, traction_wall,
 coords_mitral, velocity_mitral, coords_aortic, velocity_aortic,
-_meta   # = [cycle_period, rho, mu, spatial_dim]
+_meta       # = [cycle_period, rho, mu, spatial_dim]
+_fidelity   # JSON /meta/fidelity (Decision 9). Missing → pre-D9:
+            # diastole_usable=false; systole/ejection only.
 ```
 
 Write it with `save_ibfe_npz(frames, "bundle.npz")`, or build the arrays yourself
@@ -155,6 +171,12 @@ spatial_dim: 2
 cycle_period: 0.9
 rho: 1060.0
 mu: 0.0035
+# /meta/fidelity — omit only for a pre-D9 image-IBFE beat
+# (diastole_usable defaults to false).
+fidelity:
+  source: image_ibfe
+  decision_9: not_applied
+  diastole_usable: false
 frames:
   - t: 0.00
     fluid:  frames/fluid_000.csv    # cols: x,y[,z], u,v[,w], p, fx,fy[,fz]

@@ -42,6 +42,7 @@ import numpy as np
 import torch
 from scipy.ndimage import binary_erosion
 
+from .ibfe_fidelity import public_volume_fidelity
 from .load_ibfe_output import IBFEFrames
 
 PUBLIC_VOLUME_KEYS = ("velocity", "mask", "spacing", "origin", "times")
@@ -167,6 +168,7 @@ def frames_from_public_volume(
         velocity_aortic=torch.zeros(0, 3, dtype=dtype),
         cycle_period=period, rho=float(rho), mu=float(mu),
         spatial_dim=3,
+        fidelity=public_volume_fidelity(),
     )
 
 

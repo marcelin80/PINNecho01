@@ -43,6 +43,36 @@ def _finite(name: str, t: torch.Tensor, errors: List[str]) -> None:
         errors.append(f"{name}: contains non-finite values (NaN/Inf)")
 
 
+def _check_fidelity(frames, warnings: List[str], stats: Dict[str, float]) -> None:
+    """Surface Decision 9 /meta/fidelity so diastolic consumers see it now."""
+    from .ibfe_fidelity import (
+        DECISION_9_VALUES, DIASTOLE_UNUSABLE_WARNING, REFERENCE_VALUES,
+        SOURCE_VALUES, resolve_fidelity,
+    )
+
+    fid = resolve_fidelity(frames)
+    stats["fidelity_diastole_usable"] = float(fid.diastole_usable)
+    stats["fidelity_approximation"] = float(fid.approximation)
+    if fid.v0_scale is not None:
+        stats["fidelity_v0_scale"] = float(fid.v0_scale)
+    if not fid.diastole_usable:
+        warnings.append(
+            f"{DIASTOLE_UNUSABLE_WARNING} decision_9={fid.decision_9}; "
+            f"reference={fid.reference}; usable_phases={list(fid.usable_phases)}."
+        )
+    if fid.source not in SOURCE_VALUES:
+        warnings.append(f"fidelity.source={fid.source!r} is not a known tag")
+    if fid.decision_9 not in DECISION_9_VALUES:
+        warnings.append(f"fidelity.decision_9={fid.decision_9!r} is not a known tag")
+    if fid.reference not in REFERENCE_VALUES:
+        warnings.append(f"fidelity.reference={fid.reference!r} is not a known tag")
+    if fid.decision_9 == "approx" and fid.v0_scale is None:
+        warnings.append(
+            "fidelity.decision_9=approx but v0_scale is missing — V0 is an "
+            "exposed assumed parameter because it sets the fill volume"
+        )
+
+
 def validate_ibfe_frames(frames, strict: bool = False,
                          max_speed: float = 5.0) -> ValidationReport:
     """Validate ``frames`` against the IBFE contract.
@@ -164,6 +194,8 @@ def validate_ibfe_frames(frames, strict: bool = False,
         errors.append(f"non-physical rho={frames.rho} / mu={frames.mu}")
     if frames.cycle_period <= 0:
         errors.append(f"non-physical cycle_period={frames.cycle_period}")
+
+    _check_fidelity(frames, warnings, stats)
 
     report = ValidationReport(ok=(len(errors) == 0), errors=errors,
                               warnings=warnings, stats=stats)

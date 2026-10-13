@@ -45,6 +45,10 @@ Valves (mitral inflow / aortic outflow, Dirichlet):
 Metadata:
     cycle_period   : float  [s]      (for periodicity loss)
     rho, mu        : float           (blood properties actually used by the FSI)
+    fidelity       : optional ``/meta/fidelity`` (Decision 9). Missing =
+        pre-Decision-9 image-IBFE: systole / ejection only; diastolic
+        filling is unphysiological (V0 = image volume). See
+        :mod:`pinnecho.data.ibfe_fidelity`.
 
 Shapes for 3D: append a ``z`` column to every ``coords_*`` (making them
 ``(*, 4)``) and a ``w`` component to every ``velocity_*`` / ``forcing_*`` /
@@ -59,10 +63,18 @@ from typing import Optional
 
 import torch
 
+from .ibfe_fidelity import IBFEFidelity
+
 
 @dataclass
 class IBFEFrames:
-    """Container for one cardiac cycle of IBFE fields (see module docstring)."""
+    """Container for one cardiac cycle of IBFE fields (see module docstring).
+
+    ``fidelity`` is ``/meta/fidelity`` (Decision 9). ``None`` means a
+    pre-Decision-9 image-IBFE beat: systole / ejection only; diastolic
+    filling is unphysiological. Synthetic and public-volume constructors
+    set a source-specific tag so that warning does not apply to them.
+    """
 
     coords_fluid: torch.Tensor
     velocity_fluid: torch.Tensor
@@ -83,6 +95,7 @@ class IBFEFrames:
     rho: float
     mu: float
     spatial_dim: int = 2
+    fidelity: Optional[IBFEFidelity] = None
 
 
 def load_ibfe_output(
@@ -273,6 +286,7 @@ def synthetic_ibfe_frames(
     """
     import numpy as np
 
+    from .ibfe_fidelity import manufactured_fidelity
     from .synthetic_lv import SyntheticLVFSI
     from ..bc.boundary_conditions import fluid_traction_2d
 
@@ -319,6 +333,7 @@ def synthetic_ibfe_frames(
         cycle_period=float(config.flow.period),
         rho=float(config.flow.density), mu=float(config.flow.viscosity),
         spatial_dim=2,
+        fidelity=manufactured_fidelity(),
     )
 
 
@@ -360,6 +375,7 @@ def synthetic_ibfe_frames_3d(
     """
     import numpy as np
 
+    from .ibfe_fidelity import manufactured_fidelity
     from .synthetic_lv_3d import SyntheticLV3D
     from ..physics import operators as ops
 
@@ -413,4 +429,5 @@ def synthetic_ibfe_frames_3d(
         cycle_period=float(config.flow.period),
         rho=float(config.flow.density), mu=float(config.flow.viscosity),
         spatial_dim=3,
+        fidelity=manufactured_fidelity(),
     )

@@ -1,0 +1,110 @@
+# Decision 9 next step — isotropic V0, then fill
+
+The lock is already in [`DECISION_9.md`](DECISION_9.md): option **(a)**,
+approximate first. This is the process to run now.
+
+PINNecho does the scale and the `/meta/fidelity` tag. The laptop IBFE
+solver does the fill. Formal backward displacement is still later.
+
+```
+image mesh (loaded, ~105 mL)
+        │  isotropic scale about centroid
+        │  s = (V0 / V_img)^{1/3}   ← exposed assumption
+        ▼
+unstressed V0 (~58 mL, approximation)
+        │  atrial-pressure fill
+        │  p_img = 5 mmHg  and  10 mmHg
+        ▼
+image-volume neighbourhood (~105 mL)
+        │  export + tag decision_9=approx
+        ▼
+PINNecho may use diastole (as an approximation)
+```
+
+## 0. Attempt 2 may still run
+
+It does not change V0. Filling and EF will not be solved. Use it only
+for valve-event order, ESV at end-ejection, and AV close. First PV
+line: `R_la 0.03`, `q_close 10`, `end = 0.33`. Keep the laptop awake.
+
+A pre-D9 beat from that run is **systole / ejection only**.
+
+## 1. Print the exposed scale (no mesh required)
+
+```bash
+python scripts/decision9_isotropic_v0.py print-scale \
+    --v0-ml 58 --image-volume-ml 105 --p-img-mmhg 5 10
+```
+
+Default is Klotz 58 mL / pat12 image 105 mL →
+`(58/105)^{1/3} ≈ 0.82`. That number is an assumption. Klotz is a
+single-beat empiric with large error; pat12 is congenital. Do not hide
+the ratio inside a mesh script.
+
+## 2. Scale the *reference* mesh
+
+Vertices in SI metres (or pass `--millimetres`). Optional faces let the
+script measure cavity volume before and after.
+
+```bash
+python scripts/decision9_isotropic_v0.py scale \
+    --vertices path/to/endo_vertices.csv \
+    --faces path/to/endo_faces.csv \
+    --v0-ml 58 --image-volume-ml 105 \
+    --p-img-mmhg 5 10 \
+    --out data/decision9_v0_approx
+```
+
+Writes `vertices_scaled.csv`, `fidelity.json`, `report.json`,
+`report.md`. Centre defaults to the vertex mean.
+
+**Do not** pass a simulated `IBFEFrames` `.npz`. Those points are
+already on the loaded trajectory. The script refuses that file.
+
+This is an approximation: wall thickness scales with the mesh
+(~7.4 mm → ~6 mm) and the strain state is not the in-vivo loaded
+state. `fidelity.json` says so (`approximation: true`).
+
+## 3. Solver: fill at 5 mmHg and 10 mmHg
+
+`p_img` is unknown. Phase is not locked. Mid–late diastole is assumed
+in 5–10 mmHg.
+
+1. Replace the IBFE unstressed reference with `vertices_scaled.*`.
+2. Fill with atrial pressure toward the image volume.
+3. Run **two** fills (or two short beats): `p_la` / image pressure
+   **5 mmHg** and **10 mmHg**.
+4. Record V at each. The target neighbourhood is the image volume
+   (~105 mL), not V0. If both miss by a large amount, the V0
+   assumption is the lever — not another valve retune.
+5. Keep laptop power / performance / no-sleep for the long run.
+
+Do not start a third retune of `T_max` / `q_close` / `R_la` until this
+fill exists. Attempt 2 is the last pre-D9 retune.
+
+## 4. Export and tag
+
+Copy `fidelity.json` into the export (`_fidelity` NPZ key or manifest
+`fidelity:`), or tag after the fact:
+
+```bash
+python scripts/decision9_isotropic_v0.py tag \
+    --export path/to/new_beat.npz \
+    --v0-ml 58 --image-volume-ml 105 \
+    --p-img-mmhg 5 \
+    --out path/to/new_beat_d9.npz
+```
+
+Use the `p_img` of **that** run (5 or 10), not both, on the tagged
+file. `diastole_usable` becomes true, still marked `approximation`.
+
+`validate_ibfe_frames` will stop warning that filling is
+unphysiological. E-wave / IVPG / vortex-ring work may start on these
+beats only, and must still say “Decision 9 approx”.
+
+## What not to do
+
+- Do not scale a solved beat and call that V0.
+- Do not implement backward displacement in this repository.
+- Do not treat a pre-D9 export as diastolic GT.
+- Do not quote persist Dice or start a thrombus solver.

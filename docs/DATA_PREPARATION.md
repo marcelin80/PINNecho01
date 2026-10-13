@@ -37,6 +37,9 @@ below and call `load_ibfe_output(path)`.
 > Decision 9 is applied are systole/ejection only; diastolic filling is
 > unphysiological.** That fact is stored in `/meta/fidelity` (`_fidelity` in
 > NPZ, `fidelity:` in the manifest). See [`DECISION_9.md`](DECISION_9.md).
+> Next process: scale the reference mesh with
+> `scripts/decision9_isotropic_v0.py`, then fill at 5 and 10 mmHg
+> ([`DECISION_9_APPROX.md`](DECISION_9_APPROX.md)).
 
 ## Quick start
 

@@ -28,6 +28,13 @@ from .ibfe_fidelity import (
     Q_CLOSE_RATIONALE,
     V0_SCALE_ISOTROPIC,
 )
+from .decision9_scale import (
+    Decision9ScaleError,
+    IsotropicV0Report,
+    apply_isotropic_v0,
+    isotropic_scale_points,
+    tag_ibfe_export_approx,
+)
 from .ibfe_dataset import (
     make_ibfe_batch_builder,
     build_model_for_ibfe,
@@ -103,6 +110,11 @@ __all__ = [
     "public_volume_fidelity",
     "Q_CLOSE_RATIONALE",
     "V0_SCALE_ISOTROPIC",
+    "Decision9ScaleError",
+    "IsotropicV0Report",
+    "apply_isotropic_v0",
+    "isotropic_scale_points",
+    "tag_ibfe_export_approx",
     "make_ibfe_batch_builder",
     "build_model_for_ibfe",
     "evaluate_ibfe",

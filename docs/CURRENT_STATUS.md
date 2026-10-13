@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-12 · 브랜치 `cursor/duplex-scope-935e` · Corrado 동결, OSU 게이트 1 개정, DUPLEX는 열화 프로브로만 범위 잠금 (볼륨 대체 아님)
+> 2026-10-13 · 브랜치 `cursor/paper-no-contact-935e` · 논문은 접촉 없이. DUPLEX 공개본은 PINN GT 불가. 열화는 Corrado+우리 합성기 대비책.
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -36,7 +36,9 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 블러 GT 상한 (σ=1, 학습 없음) | **기록** | 15 cm/s Dice 0.760, 10 cm/s 0.911. PINN은 둘 다 아래. |
 | 라그랑주 잔류시간 / 혈전 솔버 | **하지 않음** | 제트가 새는 필드 위에서는 그림만 나옴. |
 | OSU rest 4D-flow (#11) | **팩 PENDING, 게이트 1 개정** | (20,77,96,72). 폐기: LV p99≥10 cm/s (잡음만으로 통과). 대체: 조직 3× time-RMS, 푸리에 1–4 ≥0.55, Aao±40%, 승모/대동맥 SV 균형, jet_chamber. 자동박스 43:60 59:69 15:37은 LV 아님. |
-| DUPLEX (CREATIS 합성 듀플렉스) | **범위만 잠금** | 창 수·제트 mL 불가. 공개 `.mat`에 CFD 2성분 정답 없음. 저자 파일이 오기 전 PINN 학습 금지. [`DUPLEX.md`](data/DUPLEX.md). |
+| DUPLEX (CREATIS 합성 듀플렉스) | **PINN GT 불가** | 무학습 점검 닫힘. 공개 `.mat`에 `(u,w)` 없음. 투영/발산 계산 불가. [`DUPLEX.md`](data/DUPLEX.md). |
+| 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
+| 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
 
 ---
@@ -129,12 +131,12 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **Corrado는 동결.** A/B/C/블러/D(창을 논문에 안 쓰면) 다시 돌리지 말 것.
-2. **게이트 1은 개정됨.** 폐기된 `speed_p99 ≥ 10 cm/s`로 채점하지 말 것. 조직 ROI·푸리에·판막 균형이 먼저다. QA NIfTI 576은 0–1000 표시값이지 cm/s가 아니다.
-3. **그다음: `mag_mean`만 보고** (peak_speed 숨김) 버전된 LV·조직·Aao·승모 마스크. 자동박스는 채점 금지. 30–45분에 윤곽이 안 나오면 중단.
-4. **Charité는 문의만** — 윈도우 CORe 불가, 개정 게이트 FAIL, 또는 30–45분 후. CFD 금지.
-5. **혈전 솔버는 아직 아님.**
-6. **DUPLEX는 볼륨 대체가 아니다.** 이상적 스냅샷 대비 시뮬 열화만. 공개 파일에 벡터 GT가 없으면 학습하지 말 것.
+1. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
+2. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
+3. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
+4. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
+5. **MIMIC은 선택.** 정답 없음, credentialing에 reference 필요.
+6. **혈전 솔버는 아직 아님.**
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
@@ -146,6 +148,7 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 - Töger et al. (PLOS ONE 2018) 등 인체 4D-flow 논문은 윤리상 영상을 공유하지 않는다.
 - Zenodo [12515230](https://zenodo.org/records/12515230) (OSU, CC BY 4.0): rest **dataset #11** (환자, VENC 200 cm/s). k-space만. MATLAB 없으면 받지 말 것.
 - Charité / Vellguth figshare는 private. 논문의 지원자 LV 4D-flow(25 frame, 1.96×1.96×2.8 mm)는 미공개. CFD를 정답으로 쓰지 않음. 문의만.
+- DUPLEX (CREATIS): 합성 A3C 색도플러. 볼륨이 아님. 공개 mat에 CFD 벡터 없음. [`DUPLEX.md`](data/DUPLEX.md).
 
 둘 다 피험자 1명 수준이라 사례 시연이다. 부전·확장 코호트는 여전히 없다.
 
@@ -188,4 +191,6 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`data/OSU_ZENODO.md`](data/OSU_ZENODO.md) | OSU #11: 윈도우 CORe → monk 팩 |
 | [`results/public_volume/OSU_GATE.md`](results/public_volume/OSU_GATE.md) | fail-cheap 5항목 (p99 폐기, 조직·푸리에·판막 균형 잠금) |
 | [`data/CHARITE_INQUIRY.md`](data/CHARITE_INQUIRY.md) | Charité 문의문 (윈도우 CORe 불가/게이트 FAIL 뒤, CFD 금지) |
-| [`data/DUPLEX.md`](data/DUPLEX.md) | CREATIS 합성 듀플렉스: 열화 프로브, 창/제트 mL 불가, 공개 mat에 CFD 벡터 없음 |
+| [`data/DUPLEX.md`](data/DUPLEX.md) | CREATIS 합성 듀플렉스: 무학습 점검 닫힘, PINN GT 불가 |
+| [`results/public_volume/DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md) | Corrado+우리 합성기 열화 사다리 (미실행) |
+| [`PAPER.md`](PAPER.md) | 접촉 없는 논문 초안 |

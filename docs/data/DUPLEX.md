@@ -86,6 +86,25 @@ dominated by that. Then degradation deltas look small.
 6. Degradation is **simulated**. The claim ceiling is robustness to
    SIMUS + their clutter model, not to bedside echo.
 
+## No-train checklist (closed 2026-10-13)
+
+| check | result |
+|---|---|
+| File format | `.mat` structs; Doppler is m/s + I/Q, not RGB |
+| GT range | No packed CFD vector. Simu Doppler sits on ±1.078 m/s |
+| CFD model count | **One** Chnafa field; 4 public echo templates (paper said 5) |
+| License | Public Girder, no CC name. Cite the paper |
+| Projection consistency | **Cannot.** Radial CFD is not in the file |
+| Planar divergence | **Cannot.** Need `(u,w)` |
+| Peak vs Nyquist | Paper: filling exceeds 1.1 m/s. Packed map is already wrapped. Unwrapped peak unknown |
+
+**Verdict:** the public dump is **not usable** as a PINN robustness GT.
+Contact for the missing field is off the essential path. Fallback:
+apply **our** synthesizer to Corrado
+([`DEGRADE_CORRADO.md`](../results/public_volume/DEGRADE_CORRADO.md)).
+Published iVFM-PINN numbers are not confirmed to be the same 20 sequences;
+do not put them in the same table.
+
 ## If the authors send the missing field
 
 Then, and only then: scenario `#1` is the measurement-model baseline

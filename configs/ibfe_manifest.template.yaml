@@ -18,6 +18,22 @@ cycle_period: 0.9       # one cardiac cycle length [s] (for periodicity)
 rho: 1060.0             # blood density [kg/m^3] used by the FSI solver
 mu: 0.0035              # blood dynamic viscosity [Pa*s]
 
+# /meta/fidelity (Decision 9). Omit only if this is a pre-D9 image-IBFE
+# beat: PINNecho will then mark diastole_usable=false (systole/ejection
+# only). Do not test E-wave / IVPG / vortex-ring hypotheses on that tag.
+# After the isotropic-scale V0 approximation, set decision_9: approx and
+# expose v0_scale / v0_ml / p_img_mmhg (assumed, not measured).
+# fidelity:
+#   source: image_ibfe
+#   decision_9: not_applied   # not_applied | approx | formal
+#   diastole_usable: false
+#   approximation: false
+#   usable_phases: [systole, ejection]
+#   reference: image_as_unstressed
+#   v0_ml: 105.0
+#   image_volume_ml: 105.0
+#   p_img_mmhg: [5.0, 10.0]
+
 # One entry per exported time frame over a single cardiac cycle.
 frames:
   - t: 0.00

@@ -220,6 +220,10 @@ true `f`.
   slow for a 1.1 m/s Nyquist wrap (`p99` 26 cm/s).
 - No thrombus, no Lagrangian residence time on a leaking field.
 - iVFM-PINN published errors are not a same-data bake-off.
+- Image-IBFE beats exported before Decision 9 treat the image as the
+  unstressed reference. Diastolic filling is unphysiological; those
+  beats are systole/ejection only. Do not use them to claim an E-wave,
+  IVPG, or vortex-ring result. [`DECISION_9.md`](DECISION_9.md).
 
 ## 7. What this paper is not
 

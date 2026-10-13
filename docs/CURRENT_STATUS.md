@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-13 · 브랜치 `cursor/paper-no-contact-935e` · 논문은 접촉 없이. DUPLEX 공개본은 PINN GT 불가. 열화는 Corrado+우리 합성기 대비책.
+> 2026-10-13 · 브랜치 `cursor/ibfe-fidelity-diastole-935e` · 결정 9 잠금: 영상은 이미 부하. 무응력 V0는 등방 스케일 근사부터. 결정 9 이전 박동은 수축·박출만.
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -40,6 +40,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
+| 결정 9 무응력 기준 | **(a) 잠금, 근사부터** | 영상을 이미 부하로 보고 V0를 만든다. (b)/(c)는 E파가 안 나와 기각. 등방 스케일 `(58/105)^{1/3}≈0.82`는 가정 파라미터. `/meta/fidelity`. [`DECISION_9.md`](DECISION_9.md). |
 
 ---
 
@@ -129,14 +130,30 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 
 ---
 
+## 4c. 결정 9 — 지금 확장기 가설 쪽에 알릴 것
+
+**결정 9가 구현되기 전의 박동 데이터는 수축과 박출 구간만 쓸 수 있다. 확장기 충만 구간은 비생리적이다.**
+
+PINNecho의 핵심 관심사(E파, IVPG, vortex ring)는 심실이 실제로 수십 mL를 채워야 존재한다. 영상 부피를 무응력 기준으로 두면 충만이 거의 없어 E파가 나오지 않는다. 그래서 (b) 영상=기준, (c) 한계로 기록은 목적을 포기하는 선택이다. 잠긴 경로는 **(a)**: 영상을 이미 부하가 걸린 상태로 보고 무응력 V0를 만든다.
+
+- **근사(먼저)**: 영상 mesh를 등방 스케일로 줄인다. `(V0/V_img)^{1/3}`. Klotz V0 ≈ 58 mL는 단일 박동 경험식이라 오차가 크고, pat12는 선천성 심질환이라 순응도가 다를 수 있다. `p_img`는 모른다 — mid~late diastole 5–10 mmHg를 가정하고 두 값에서 민감도를 본다. 벽 두께가 같이 줄어 ~7.4 → ~6 mm가 되고 변형 상태도 실제와 다르다. 문서에 근사라고 쓴다.
+- **정식(나중에)**: `p_img` 아래서 영상 형상이 되는 무응력 형상의 역변환. IBFE 반복마다 정적 해석. 이 저장소에서 돌리지 않는다.
+- **attempt 2는 돌려도 된다.** V0가 그대로이므로 충만·EF는 풀리지 않는다. 예측은 Vmax 108–110 mL, 순서만. 목적은 판막 이벤트 순서, 박출 끝 ESV, AV 닫힘. ESV 절댓값은 `T_max`·후부하·IVC 누설에 의존한다. 재튜닝 2회째이고, 3회째는 결정 9 이후.
+- **`q_close`**: 열린 동안 `p_lv = p_la`라 압력 기반 전환이 안 된다. 그래서 Q로 우회한다.
+
+표시 위치: `/meta/fidelity` (`diastole_usable=false`가 기본). 검증기가 확장기 경고를 낸다. [`DECISION_9.md`](DECISION_9.md).
+
+---
+
 ## 5. 지금 열린 일 (우선순위)
 
-1. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
-2. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
-3. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
-4. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
-5. **MIMIC은 선택.** 정답 없음, credentialing에 reference 필요.
-6. **혈전 솔버는 아직 아님.**
+1. **결정 9 근사 V0를 솔버 쪽에 적용한다.** 등방 스케일, `v0_scale`을 가정으로 노출, `p_img` 5 및 10 mmHg. 그 전에 나온 박동은 확장기 가설에 쓰지 말 것.
+2. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
+3. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
+4. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
+5. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
+6. **MIMIC은 선택.** 정답 없음, credentialing에 reference 필요.
+7. **혈전 솔버는 아직 아님.**
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
@@ -194,3 +211,4 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`data/DUPLEX.md`](data/DUPLEX.md) | CREATIS 합성 듀플렉스: 무학습 점검 닫힘, PINN GT 불가 |
 | [`results/public_volume/DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md) | Corrado+우리 합성기 열화 사다리 (미실행) |
 | [`PAPER.md`](PAPER.md) | 접촉 없는 논문 초안 |
+| [`DECISION_9.md`](DECISION_9.md) | 무응력 기준 (a) 잠금. `/meta/fidelity`. 결정 9 이전 박동은 수축·박출만. |

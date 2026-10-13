@@ -21,6 +21,10 @@ light loaders plus a saver:
 Units & conventions (identical to the :class:`IBFEFrames` docstring): SI metres,
 seconds, m/s, Pa, N/m^3; coordinate columns are spatial-first then time; 2D uses
 ``(x, y[, t])`` and 3D appends ``z``.
+
+``/meta/fidelity`` (Decision 9) is the NPZ key ``_fidelity`` (JSON) or the
+manifest ``fidelity:`` block. A missing field means a pre-Decision-9
+image-IBFE beat: systole / ejection only.
 """
 
 from __future__ import annotations
@@ -61,26 +65,36 @@ def _vel_cols(spatial_dim: int) -> List[str]:
 # --------------------------------------------------------------------------- #
 def save_ibfe_npz(frames, path: str | Path) -> Path:
     """Serialise an :class:`IBFEFrames` to a single ``.npz`` bundle."""
+    from .ibfe_fidelity import dumps_fidelity, resolve_fidelity
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     arrays = {k: getattr(frames, k).detach().cpu().numpy() for k in NPZ_TENSOR_KEYS}
     arrays["_meta"] = np.array(
         [float(frames.cycle_period), float(frames.rho), float(frames.mu),
          float(frames.spatial_dim)], dtype=np.float64)
+    arrays["_fidelity"] = np.asarray(dumps_fidelity(resolve_fidelity(frames)))
     np.savez(path, **arrays)
     return path
 
 
 def load_ibfe_npz(path: str | Path, dtype: torch.dtype = torch.float64):
-    """Load an :class:`IBFEFrames` from a ``.npz`` bundle written by :func:`save_ibfe_npz`."""
+    """Load an :class:`IBFEFrames` from a ``.npz`` bundle written by :func:`save_ibfe_npz`.
+
+    ``_meta`` stays the 4-vector ``[cycle_period, rho, mu, spatial_dim]``.
+    ``_fidelity`` is the JSON ``/meta/fidelity`` object (Decision 9). A
+    missing key is treated as a pre-Decision-9 image-IBFE beat.
+    """
+    from .ibfe_fidelity import loads_fidelity
     from .load_ibfe_output import IBFEFrames
 
     data = np.load(path)
     meta = data["_meta"]
     kw = {k: torch.as_tensor(data[k], dtype=dtype) for k in NPZ_TENSOR_KEYS}
+    fidelity = loads_fidelity(data["_fidelity"]) if "_fidelity" in data.files else loads_fidelity(None)
     return IBFEFrames(
         cycle_period=float(meta[0]), rho=float(meta[1]), mu=float(meta[2]),
-        spatial_dim=int(round(float(meta[3]))), **kw,
+        spatial_dim=int(round(float(meta[3]))), fidelity=fidelity, **kw,
     )
 
 
@@ -122,6 +136,10 @@ def load_ibfe_manifest(manifest_path: str | Path,
         cycle_period: 0.9         # seconds
         rho: 1060.0               # kg/m^3
         mu: 0.0035                # Pa*s
+        fidelity:                 # /meta/fidelity (Decision 9); optional
+          source: image_ibfe
+          decision_9: not_applied
+          diastole_usable: false
         frames:
           - t: 0.00
             fluid:  frames/fluid_000.csv    # x,y[,z],u,v[,w],p,fx,fy[,fz]
@@ -195,6 +213,8 @@ def load_ibfe_manifest(manifest_path: str | Path,
             return torch.as_tensor(np.concatenate(buf[key], axis=0), dtype=dtype)
         return torch.zeros(0, ncols, dtype=dtype)
 
+    from .ibfe_fidelity import fidelity_from_mapping
+
     return IBFEFrames(
         coords_fluid=_cat("coords_fluid", dim + 1),
         velocity_fluid=_cat("velocity_fluid", dim),
@@ -210,6 +230,7 @@ def load_ibfe_manifest(manifest_path: str | Path,
         velocity_aortic=_cat("velocity_aortic", dim),
         cycle_period=float(spec["cycle_period"]),
         rho=float(spec["rho"]), mu=float(spec["mu"]), spatial_dim=dim,
+        fidelity=fidelity_from_mapping(spec.get("fidelity")),
     )
 
 
@@ -301,8 +322,11 @@ def save_ibfe_manifest_csv(frames, out_dir: str | Path,
                 entry["mitral"] = f"frames/mitral_{i:03d}.csv"
         manifest_frames.append(entry)
 
+    from .ibfe_fidelity import resolve_fidelity
+
     manifest = {"spatial_dim": dim, "cycle_period": float(frames.cycle_period),
                 "rho": float(frames.rho), "mu": float(frames.mu),
+                "fidelity": resolve_fidelity(frames).to_dict(),
                 "frames": manifest_frames}
     mpath = out_dir / "manifest.yaml"
     with open(mpath, "w") as fh:

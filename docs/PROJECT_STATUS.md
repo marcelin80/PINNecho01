@@ -42,9 +42,13 @@ FSI 정보 기반 물리정보신경망(PINN)으로 희소·단일성분 도플�
 - **Stage 1 범위**: 실제 환자·에코 데이터 없음. IBAMR/IBFE 파이프라인 출력을 모사한
   **해석적·자기일관(divergence-free, exact no-slip, NS-exact) 합성 지상진값** 위에서 검증.
 - **데이터 출처(중요)**: PINNecho가 받는 모든 양은 **전진 FSI 시뮬레이션 출력**이다. MRI
-  (HVSMR-2.0, ECG-게이트·정지 3D CMR)는 **LV 기하만** 제공하고(심근 ~3 mm 쉘·무응력 기준
-  *가정*), 벽 운동·속도는 주지 않는다. 즉 벽속도·압력·forcing은 모두 시뮬레이션 값이며 **측정
-  속도 지상진값은 없다**. 프로젝트 전체에서 유일한 실측은 최종 임상 **도플러 에코**뿐이다.
+  (HVSMR-2.0, ECG-게이트·정지 3D CMR)는 **LV 기하만** 제공하고(심근 ~3 mm 쉘), 벽 운동·속도는
+  주지 않는다. 즉 벽속도·압력·forcing은 모두 시뮬레이션 값이며 **측정 속도 지상진값은 없다**.
+  프로젝트 전체에서 유일한 실측은 최종 임상 **도플러 에코**뿐이다.
+- **결정 9 (잠금, 2026-10-13)**: 영상 기하를 무응력으로 쓰면 충만이 거의 없어 E파가 나오지
+  않는다. 영상을 **이미 부하**로 보고 무응력 V0를 만든다. 먼저 등방 스케일 근사
+  (`(V0/V_img)^{1/3}`, 가정 파라미터). 정식 backward displacement는 나중. 결정 9 이전
+  박동은 수축·박출만 사용. `/meta/fidelity`. [`DECISION_9.md`](DECISION_9.md).
 
 ### 두 백본 (아키텍처는 동일, 물리항만 다름)
 
@@ -275,7 +279,8 @@ CI: `.github/workflows/ci.yml`가 Python 3.10/3.11에서 `pytest` 전체 실행.
 
 필드 요약: 유체 볼륨(`coords/velocity/pressure/forcing_fluid`), 인터페이스
 (`coords/normals/velocity/traction_wall`), 밸브(`coords/velocity_mitral|aortic`),
-메타(`cycle_period, rho, mu, spatial_dim`). 단위는 SI, 좌표는 공간→시간 순.
+메타(`cycle_period, rho, mu, spatial_dim`, `/meta/fidelity`). 단위는 SI, 좌표는 공간→시간 순.
+결정 9 이전 실박동은 `diastole_usable=false` (수축·박출만).
 
 ---
 

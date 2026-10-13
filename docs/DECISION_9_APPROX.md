@@ -3,8 +3,27 @@
 The lock is already in [`DECISION_9.md`](DECISION_9.md): option **(a)**,
 approximate first. This is the process to run now.
 
-PINNecho does the scale and the `/meta/fidelity` tag. The laptop IBFE
-solver does the fill. Formal backward displacement is still later.
+PINNecho does the `/meta/fidelity` tag. On monk the **V0 mesh already
+exists** — do not scale `LV.e` again. The laptop IBFE solver is in the
+fill. Formal backward displacement is still later.
+
+**Applied (2026-10-13, solver homothety, `~/pat12_meshes/scale_reference.json`):**
+
+| quantity | value |
+|---|---|
+| image | `~/pat12_meshes/LV.e` |
+| V0 mesh | `~/pat12_meshes/LV_V0.e` |
+| `V_img` | **105.466 mL** (measured cavity) |
+| `V0` | **58.000 mL** |
+| `alpha` | **0.819292** (`(58/105.466)^{1/3}`) |
+| wall | 7.4 mm → 6.06 mm |
+| invert | 0; `pass_v0` true |
+| this fill | `~/lv_runs/scale_fill`, `P_END=8` mmHg, ramp 0.08 s + hold 0.45 s |
+
+`print-scale` with 58/105 gives 0.8205. That is the rounded formula.
+The mesh used the measured 105.466 mL. Keep **0.819292**. 5 and 10 mmHg
+are recorded as Klotz-V0 sensitivity (60.12 / 56.95 mL). This first
+fill is the midpoint 8 mmHg. Do not abort it to start 5 and 10.
 
 On monk: use **`python3`**, not `python` (that name is not installed).
 Run from the repo root (`~/PINNecho01`), not from `~`. Activate
@@ -82,6 +101,36 @@ already on the loaded trajectory. The script refuses that file.
 This is an approximation: wall thickness scales with the mesh
 (~7.4 mm → ~6 mm) and the strain state is not the in-vivo loaded
 state. `fidelity.json` says so (`approximation: true`).
+
+## 2b. On monk now — let `scale_fill` finish
+
+Do not start PINNecho `scale`. Do not start a second fill at 5 or 10
+while this one is running. Power / performance / no-sleep stay on.
+
+```bash
+pgrep -af main3d_lv_passive || echo 'solver not running'
+tail -3 ~/lv_runs/scale_fill.out
+tail -5 ~/lv_runs/scale_fill/lv_pv.dat
+```
+
+Watch:
+
+- `V` should leave 58 mL as P rises toward 8 mmHg. Target neighbourhood
+  is **~105 mL**, not V0.
+- `wall volume ratio` stays ≈ 1.
+- `max |J-1|` stays under the 0.8 stop, and does not run away. A few
+  elements above 0.1 at 2 mmHg (elem 48946) is a watch item, not a
+  kill.
+- `box clearance` stays above 0.8 cm.
+
+At step 800 this run was t=0.026 s, P≈2 mmHg, V=58.23 mL — still the
+ramp. END_TIME=0.53 s ≈ 16k steps. Do not read Vmax from the first
+minutes.
+
+After it exits: last PV line is the 8 mmHg hold. If V is far below
+105 mL, the lever is V0 or the HO law, not `q_close`. Then consider
+the 5 and 10 mmHg fills. If `max |J-1|` climbed through the stop,
+do not export.
 
 ## 3. Solver: fill at 5 mmHg and 10 mmHg
 

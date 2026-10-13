@@ -40,7 +40,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
-| 결정 9 무응력 기준 | **(a) 잠금, 근사 스케일 준비됨** | `scripts/decision9_isotropic_v0.py`가 기준 mesh를 등방 스케일. 솔버 충만(5·10 mmHg)은 노트북. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md). |
+| 결정 9 무응력 기준 | **a1 적용됨, 충만 진행** | monk `LV_V0.e` α=0.819292. `scale_fill`이 8 mmHg로 부풀리는 중. 확장기 가설은 아직 불가. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md). |
 
 ---
 
@@ -147,7 +147,7 @@ PINNecho의 핵심 관심사(E파, IVPG, vortex ring)는 심실이 실제로 수
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **결정 9 근사 V0 — 지금.** 기준 mesh를 `decision9_isotropic_v0.py scale`로 줄인다. 솔버에서 심방 압력 5 mmHg와 10 mmHg로 충만시켜 영상 부피(~105 mL) 근처를 본다. export는 `tag`로 `decision_9=approx`. 그 전에 나온 박동은 확장기 가설에 쓰지 말 것. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md).
+1. **결정 9 a1는 monk에서 끝.** `LV_V0.e`, α=0.819292, V0=58.000 mL, V_img=105.466 mL. PINNecho로 다시 줄이지 말 것. **지금 할 일:** `~/lv_runs/scale_fill`(8 mmHg)이 끝날 때까지 두고 V가 ~105 mL 근처인지, `max |J-1|`이 0.8 아래에서 멈추는지 본다. 그 전에는 확장기 가설에 쓰지 말 것. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md).
 2. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
 3. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
 4. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.

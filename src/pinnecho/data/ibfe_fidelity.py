@@ -209,6 +209,55 @@ def public_volume_fidelity() -> IBFEFidelity:
     )
 
 
+# Applied on monk 2026-10-13 (solver-side homothety, not PINNecho scale).
+# V_img is the measured cavity used for alpha, not the round 105 mL formula.
+MONK_V_IMG_ML = 105.46603038560076
+MONK_V0_ML = 58.0
+MONK_ALPHA = 0.8192915289866581
+MONK_P_IMG_MMHG = 8.0
+MONK_SCALE_REFERENCE = "/home/marce/pat12_meshes/scale_reference.json"
+MONK_LV_V0 = "/home/marce/pat12_meshes/LV_V0.e"
+
+
+def fidelity_from_scale_reference(raw: Mapping[str, Any]) -> IBFEFidelity:
+    """Map a solver ``scale_reference.json`` onto ``/meta/fidelity``.
+
+    This tags the *V0 mesh*, not a filled beat. ``diastole_usable`` stays
+    false until a fill near image volume is exported.
+    """
+    if not raw:
+        return default_pre_decision_9()
+    alpha = raw.get("alpha", raw.get("v0_scale"))
+    v0 = raw.get("V0_actual_mL", raw.get("V0_target_mL", raw.get("v0_ml")))
+    v_img = raw.get("V_img_mL", raw.get("image_volume_ml"))
+    p_range = raw.get("p_img_range_mmHg", raw.get("p_img_mmhg", P_IMG_MMHG_ASSUMED))
+    extra = {
+        k: raw[k] for k in (
+            "p_img_mmHg_assumed", "klotz_V0_at_p_img_mL",
+            "klotz_V0_at_5_mL", "klotz_V0_at_10_mL",
+            "image", "out", "n_inverted", "pass_v0",
+        ) if k in raw
+    }
+    return IBFEFidelity(
+        source="image_ibfe",
+        decision_9="approx",
+        diastole_usable=False,
+        approximation=True,
+        usable_phases=("reference",),
+        reference="isotropic_scale_v0",
+        v0_scale=_opt_float(alpha),
+        v0_ml=_opt_float(v0),
+        image_volume_ml=_opt_float(v_img),
+        p_img_mmhg=tuple(float(p) for p in p_range),
+        notes=(
+            "Solver-side Decision 9 a1: isotropic V0 mesh. "
+            "Fill with atrial pressure toward V_img before a diastolic beat. "
+            + str(raw.get("note", APPROX_NOTE))
+        ),
+        extra=extra,
+    )
+
+
 def decision_9_approx_fidelity(
     v0_ml: float = KLOTZ_V0_ML,
     image_volume_ml: float = IMAGE_VOLUME_ML_PAT12,

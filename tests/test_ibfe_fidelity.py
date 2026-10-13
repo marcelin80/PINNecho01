@@ -15,8 +15,12 @@ from pinnecho.data.ibfe_fidelity import (
     P_IMG_MMHG_ASSUMED,
     Q_CLOSE_RATIONALE,
     V0_SCALE_ISOTROPIC,
+    MONK_ALPHA,
+    MONK_V0_ML,
+    MONK_V_IMG_ML,
     decision_9_approx_fidelity,
     default_pre_decision_9,
+    fidelity_from_scale_reference,
     diastole_usable,
     isotropic_linear_scale,
     loads_fidelity,
@@ -60,6 +64,36 @@ def test_missing_fidelity_is_pre_decision_9_systole_only():
     assert fid.reference == "image_as_unstressed"
     assert fid.usable_phases == ("systole", "ejection")
     assert fid.p_img_mmhg == P_IMG_MMHG_ASSUMED
+
+
+def test_monk_scale_reference_is_v0_mesh_not_a_filled_beat():
+    raw = {
+        "decision_9": "a",
+        "decision_9_stage": "a1-isotropic-scale",
+        "approximation": True,
+        "algorithm": "isotropic_scale",
+        "V_img_mL": MONK_V_IMG_ML,
+        "V0_target_mL": 58.0,
+        "V0_actual_mL": MONK_V0_ML,
+        "alpha": MONK_ALPHA,
+        "p_img_mmHg_assumed": 8.0,
+        "p_img_range_mmHg": [5.0, 10.0],
+        "image": "/home/marce/pat12_meshes/LV.e",
+        "out": "/home/marce/pat12_meshes/LV_V0.e",
+        "pass_v0": True,
+        "n_inverted": 0,
+        "note": "Approximation: homothety about the cavity centroid.",
+    }
+    fid = fidelity_from_scale_reference(raw)
+    assert fid.decision_9 == "approx"
+    assert fid.approximation is True
+    assert fid.diastole_usable is False
+    assert fid.usable_phases == ("reference",)
+    assert abs(fid.v0_scale - MONK_ALPHA) < 1e-12
+    assert abs(fid.v0_scale - isotropic_linear_scale(MONK_V0_ML, MONK_V_IMG_ML)) < 1e-12
+    # Formula 58/105 is close but not the applied mesh scale.
+    assert abs(fid.v0_scale - V0_SCALE_ISOTROPIC) > 1e-4
+    assert fid.extra["p_img_mmHg_assumed"] == 8.0
 
 
 def test_approx_fidelity_exposes_v0_and_p_img():

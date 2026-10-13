@@ -150,6 +150,18 @@ def test_cli_print_scale_and_scale(tmp_path):
     assert abs(report["measured_v0_ml"] - 58.0) < 1e-5
 
 
+def test_cli_missing_vertices_is_clear():
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "scale",
+         "--vertices", "path/to/endo_vertices.csv",
+         "--out", "/tmp/decision9_nope"],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 2
+    assert "not found" in proc.stderr
+    assert "python3" in proc.stderr
+
+
 def test_cli_refuses_ibfe_export(tmp_path):
     torch.set_default_dtype(torch.float64)
     frames = synthetic_ibfe_frames(Config(), n_fluid=40, n_wall=20, n_frames=2)

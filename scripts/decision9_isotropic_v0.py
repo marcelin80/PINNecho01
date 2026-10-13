@@ -6,19 +6,19 @@ solve IBFE. Scale the image mesh to V0, write the exposed assumptions,
 then on the laptop solver fill with atrial pressure at 5 mmHg and
 10 mmHg toward the image volume.
 
-    python scripts/decision9_isotropic_v0.py scale \\
-        --vertices path/to/endo_vertices.csv \\
-        --faces path/to/endo_faces.csv \\
+    python3 scripts/decision9_isotropic_v0.py print-scale \\
+        --v0-ml 58 --image-volume-ml 105
+
+    python3 scripts/decision9_isotropic_v0.py scale \\
+        --vertices /absolute/path/to/real_endo_vertices.csv \\
+        --faces /absolute/path/to/real_endo_faces.csv \\
         --v0-ml 58 --image-volume-ml 105 \\
         --out data/decision9_v0_approx
 
-    python scripts/decision9_isotropic_v0.py print-scale \\
-        --v0-ml 58 --image-volume-ml 105
-
-    python scripts/decision9_isotropic_v0.py tag \\
-        --export path/to/new_beat.npz \\
+    python3 scripts/decision9_isotropic_v0.py tag \\
+        --export /absolute/path/to/new_beat.npz \\
         --v0-ml 58 --image-volume-ml 105 --p-img-mmhg 5 \\
-        --out path/to/new_beat_d9.npz
+        --out /absolute/path/to/new_beat_d9.npz
 
 Do not pass a simulated IBFEFrames bundle to ``scale``. Those points
 are already on the loaded trajectory.
@@ -113,7 +113,20 @@ def main(argv=None) -> int:
     return 1
 
 
+def _require_file(path: str, what: str) -> None:
+    p = Path(path)
+    if not p.is_file():
+        raise Decision9ScaleError(
+            f"{what} not found: {p}. Run from the PINNecho repo root with "
+            "python3 (not python). print-scale needs no mesh; scale needs a "
+            "real reference-vertex file, not a path/to/... placeholder."
+        )
+
+
 def _scale(args) -> int:
+    _require_file(args.vertices, "vertices")
+    if args.faces:
+        _require_file(args.faces, "faces")
     points = load_vertices(args.vertices, key=args.vertices_key)
     faces = load_faces(args.faces, key=args.faces_key) if args.faces else None
     center = None if args.center is None else args.center
@@ -136,6 +149,7 @@ def _tag(args) -> int:
     from pinnecho.data.ibfe_io import save_ibfe_npz
     from pinnecho.data.load_ibfe_output import load_ibfe_output
 
+    _require_file(args.export, "export")
     frames = load_ibfe_output(args.export)
     tagged = tag_ibfe_export_approx(
         frames,

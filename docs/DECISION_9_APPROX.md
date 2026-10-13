@@ -6,6 +6,11 @@ approximate first. This is the process to run now.
 PINNecho does the scale and the `/meta/fidelity` tag. The laptop IBFE
 solver does the fill. Formal backward displacement is still later.
 
+On monk: use **`python3`**, not `python` (that name is not installed).
+Run from the repo root (`~/PINNecho01`), not from `~`. Activate
+`.venv` so `pinnecho` imports. `path/to/endo_*.csv` is a placeholder —
+`print-scale` needs no mesh; `scale` needs the real reference vertices.
+
 ```
 image mesh (loaded, ~105 mL)
         │  isotropic scale about centroid
@@ -31,10 +36,19 @@ A pre-D9 beat from that run is **systole / ejection only**.
 
 ## 1. Print the exposed scale (no mesh required)
 
+On monk:
+
 ```bash
-python scripts/decision9_isotropic_v0.py print-scale \
+cd ~/PINNecho01
+git fetch origin cursor/d9-isotropic-v0-935e
+git checkout cursor/d9-isotropic-v0-935e
+source .venv/bin/activate
+python3 scripts/decision9_isotropic_v0.py print-scale \
     --v0-ml 58 --image-volume-ml 105 --p-img-mmhg 5 10
 ```
+
+Expect `v0_scale` ≈ **0.8205**. If `python` is not found, do not install
+`python-is-python3` for this; call `python3`.
 
 Default is Klotz 58 mL / pat12 image 105 mL →
 `(58/105)^{1/3} ≈ 0.82`. That number is an assumption. Klotz is a
@@ -47,13 +61,17 @@ Vertices in SI metres (or pass `--millimetres`). Optional faces let the
 script measure cavity volume before and after.
 
 ```bash
-python scripts/decision9_isotropic_v0.py scale \
-    --vertices path/to/endo_vertices.csv \
-    --faces path/to/endo_faces.csv \
+# still in ~/PINNecho01 with .venv on
+python3 scripts/decision9_isotropic_v0.py scale \
+    --vertices /absolute/path/to/real_endo_vertices.csv \
+    --faces /absolute/path/to/real_endo_faces.csv \
     --v0-ml 58 --image-volume-ml 105 \
     --p-img-mmhg 5 10 \
     --out data/decision9_v0_approx
 ```
+
+Do not run this until the CSV (or `.npy`) actually exists. Faces are
+optional; without them the script still scales but cannot measure mL.
 
 Writes `vertices_scaled.csv`, `fidelity.json`, `report.json`,
 `report.md`. Centre defaults to the vertex mean.
@@ -88,11 +106,11 @@ Copy `fidelity.json` into the export (`_fidelity` NPZ key or manifest
 `fidelity:`), or tag after the fact:
 
 ```bash
-python scripts/decision9_isotropic_v0.py tag \
-    --export path/to/new_beat.npz \
+python3 scripts/decision9_isotropic_v0.py tag \
+    --export /absolute/path/to/new_beat.npz \
     --v0-ml 58 --image-volume-ml 105 \
     --p-img-mmhg 5 \
-    --out path/to/new_beat_d9.npz
+    --out /absolute/path/to/new_beat_d9.npz
 ```
 
 Use the `p_img` of **that** run (5 or 10), not both, on the tagged

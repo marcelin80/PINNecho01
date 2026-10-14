@@ -40,7 +40,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
-| 결정 9 무응력 기준 | **a1 적용됨, 충만 진행** | monk `LV_V0.e` α=0.819292. `scale_fill`이 8 mmHg로 부풀리는 중. 확장기 가설은 아직 불가. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md). |
+| 결정 9 무응력 기준 | **a1 적용됨, 8 mmHg 홀드 중** | t=0.132 s, V=73.6 mL (목표 ~105). `max \|J-1\|=0.87` (elem 99215). 죽이지 말 것. 확장기 가설 아직 불가. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md). |
 
 ---
 

@@ -118,19 +118,35 @@ Watch:
 - `V` should leave 58 mL as P rises toward 8 mmHg. Target neighbourhood
   is **~105 mL**, not V0.
 - `wall volume ratio` stays ≈ 1.
-- `max |J-1|` stays under the 0.8 stop, and does not run away. A few
-  elements above 0.1 at 2 mmHg (elem 48946) is a watch item, not a
-  kill.
+- `max |J-1|` — the job stops on **p99.9 > 0.8**, not max. Max already
+  exceeded 0.8 at the 8 mmHg hold (elem 99215). Watch for a cascade.
+  Do not export if max runs away or p99.9 trips.
 - `box clearance` stays above 0.8 cm.
 
-At step 800 this run was t=0.026 s, P≈2 mmHg, V=58.23 mL — still the
-ramp. END_TIME=0.53 s ≈ 16k steps. Do not read Vmax from the first
-minutes.
+Checkpoint **2026-10-14 ~00:11 UTC** (still running, do not kill):
+
+| | value |
+|---|---|
+| t | 0.132 s (8 mmHg hold; ramp ended at 0.08 s) |
+| P | **8 mmHg** |
+| V | **73.56 mL** (from 58; target ~105.5) |
+| wall volume ratio | 0.99991 |
+| `max \|J-1\|` | **0.867** (elem 99215), climbing |
+| p99.9 `\|J-1\|` | 0.211 (stop is p99.9 > 0.8, not max) |
+| n(`\|J-1\|>0.1`) | 919 |
+| box clearance | 3.49 cm |
+
+V is still rising on the hold (~0.1 mL / 20 steps). Do not read the
+8 mmHg answer until V plateaus or the job exits. `max |J-1|` is
+already above 0.8 — watch elem 99215. If max runs away (tens → 1e5)
+or p99.9 trips 0.8, do not export. A plateau near 75–85 mL would mean
+HO + V0=58 does **not** reach image volume at 8 mmHg. The lever then
+is V0 or the HO law, not `q_close`. 5 mmHg would fill less; 10 mmHg
+would fill more and likely worsen the sliver.
 
 After it exits: last PV line is the 8 mmHg hold. If V is far below
-105 mL, the lever is V0 or the HO law, not `q_close`. Then consider
-the 5 and 10 mmHg fills. If `max |J-1|` climbed through the stop,
-do not export.
+105 mL, record that before starting 5/10. If `max |J-1|` climbed
+through a cascade, do not export.
 
 ## 3. Solver: fill at 5 mmHg and 10 mmHg
 

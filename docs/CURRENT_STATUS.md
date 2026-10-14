@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-13 · 브랜치 `cursor/ibfe-fidelity-diastole-935e` · 결정 9 잠금: 영상은 이미 부하. 무응력 V0는 등방 스케일 근사부터. 결정 9 이전 박동은 수축·박출만.
+> 2026-10-13 · 브랜치 `cursor/d9-isotropic-v0-935e` · 결정 9 다음 단계: 영상 mesh를 등방 스케일로 V0. 솔버는 5·10 mmHg로 충만.
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -40,7 +40,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
-| 결정 9 무응력 기준 | **(a) 잠금, 근사부터** | 영상을 이미 부하로 보고 V0를 만든다. (b)/(c)는 E파가 안 나와 기각. 등방 스케일 `(58/105)^{1/3}≈0.82`는 가정 파라미터. `/meta/fidelity`. [`DECISION_9.md`](DECISION_9.md). |
+| 결정 9 무응력 기준 | **a1 적용됨, 8 mmHg 홀드 중** | t=0.132 s, V=73.6 mL (목표 ~105). `max \|J-1\|=0.87` (elem 99215). 죽이지 말 것. 확장기 가설 아직 불가. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md). |
 
 ---
 
@@ -147,7 +147,7 @@ PINNecho의 핵심 관심사(E파, IVPG, vortex ring)는 심실이 실제로 수
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **결정 9 근사 V0를 솔버 쪽에 적용한다.** 등방 스케일, `v0_scale`을 가정으로 노출, `p_img` 5 및 10 mmHg. 그 전에 나온 박동은 확장기 가설에 쓰지 말 것.
+1. **결정 9 a1는 monk에서 끝.** `LV_V0.e`, α=0.819292, V0=58.000 mL, V_img=105.466 mL. PINNecho로 다시 줄이지 말 것. **지금 할 일:** `~/lv_runs/scale_fill`(8 mmHg)이 끝날 때까지 두고 V가 ~105 mL 근처인지, `max |J-1|`이 0.8 아래에서 멈추는지 본다. 그 전에는 확장기 가설에 쓰지 말 것. [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md).
 2. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
 3. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
 4. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
@@ -212,3 +212,4 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`results/public_volume/DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md) | Corrado+우리 합성기 열화 사다리 (미실행) |
 | [`PAPER.md`](PAPER.md) | 접촉 없는 논문 초안 |
 | [`DECISION_9.md`](DECISION_9.md) | 무응력 기준 (a) 잠금. `/meta/fidelity`. 결정 9 이전 박동은 수축·박출만. |
+| [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md) | 등방 스케일 절차. 솔버 충만 5·10 mmHg. |

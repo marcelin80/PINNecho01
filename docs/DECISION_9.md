@@ -99,10 +99,25 @@ switch cannot fire. Close is therefore keyed on volumetric flow `Q`
 pressure criterion. It belongs in the export notes (`Q_CLOSE_RATIONALE`
 in `ibfe_fidelity.py`).
 
+## Next process (approximate V0)
+
+PINNecho now scales a **reference** mesh and writes the exposed
+assumptions. The laptop solver then fills at 5 mmHg and 10 mmHg.
+
+See [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md).
+
+```bash
+# monk: python3, from ~/PINNecho01, venv on
+python3 scripts/decision9_isotropic_v0.py print-scale
+python3 scripts/decision9_isotropic_v0.py scale \
+    --vertices /absolute/path/to/real_endo_vertices.csv \
+    --out data/decision9_v0_approx
+```
+
 ## What this repo does not do
 
-- Isotropic scaling of the IBFE reference mesh (that is the solver
-  preprocessing step).
-- Backward-displacement static solves.
-- Attempt 2 itself (runs on the laptop solver, not here).
+- Backward-displacement static solves (formal path; later).
+- The IBFE fill itself (atrial pressure at 5 and 10 mmHg — laptop).
+- Attempt 2 itself (valve-order run on the laptop).
 - Treating (b) or (c) as acceptable for diastolic hypotheses.
+- Scaling a simulated `IBFEFrames` export and calling that V0.

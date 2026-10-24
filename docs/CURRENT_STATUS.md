@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-24 · 브랜치 `cursor/pipeline-validation-935e` · 충만·판막 순서는 파이프라인만. E파/IVPG 불가. 다음은 η=0 박동 2–3.
+> 2026-10-24 · 브랜치 `cursor/pipeline-validation-935e` · E파/IVPG는 목표. 지금 박동은 파이프라인만. 다음은 η=0 박동 2–3.
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -40,7 +40,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
 | 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
-| 결정 9 무응력 기준 | **파이프라인만 잠금** | 충만·판막 순서 통과. ED 87.7 예열, EF 33%, V0=58, dx=1.875. `/meta/fidelity=pipeline-validation`. E파/IVPG 불가. 다음: η=0 박동 2–3. [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md). |
+| 결정 9 무응력 기준 | **파이프라인만 잠금** | E파/IVPG는 목표. 지금 박동은 그 평가용이 아님. ED 87.7 예열, dx=1.875. 다음: η=0 박동 2–3. [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md). |
 
 ---
 

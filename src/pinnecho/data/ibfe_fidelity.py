@@ -119,10 +119,10 @@ PIPELINE_VALIDATION_NOTE = (
     "Late-fill stall 111 to 27 mL/s was pericardial dashpot eta=0.05; "
     "eta=0 restores D2 about 130 mL/s (first gate). First beat is warmup "
     "(ED 87.7 mL, short diastole); next ED about 90-92 mL. EF 33 percent "
-    "at V0=58 mL. dx=1.875 mm. Enough for pipeline / relationship "
-    "plumbing. Not enough for physiological E-wave / IVPG. Next: close "
-    "beats 2-3 at eta=0. Do not spend the next tens of hours on B4 to "
-    "rescue an E-wave claim at this resolution."
+    "at V0=58 mL. dx=1.875 mm. Enough for pipeline plumbing. "
+    "E-wave / IVPG remain the PINNecho goal; this beat cannot evaluate "
+    "them. Next: close beats 2-3 at eta=0. B4 at this dx does not unlock "
+    "those claims."
 )
 
 

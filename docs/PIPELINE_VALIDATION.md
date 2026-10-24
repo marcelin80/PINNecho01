@@ -11,9 +11,13 @@ Locked answer to the solver-side question:
 
 ## Answer
 
-**파이프라인만.** 관계(배관: 판막 순서, 충만 존재, export 계약)는
-이 시리즈로 확인할 수 있다. **생리 E파 / IVPG / vortex ring 평가는
-부족하다.**
+**파이프라인만 — 지금 이 박동에 대해서.** 관계(배관: 판막 순서, 충만
+존재, export 계약)는 이 시리즈로 확인할 수 있다.
+
+생리 E파 / IVPG / vortex ring은 PINNecho에 **필요하다.** 그것이
+프로젝트의 핵심 관심사다. “부족”은 목표가 아니라는 뜻이 아니다.
+**이 dx=1.875 mm 예열 박동으로는 그 가설을 평가할 수 없다**는 뜻이다.
+목적지는 그대로다. 지금 export가 그 평가를 열지 못할 뿐이다.
 
 `/meta/fidelity` = `pipeline-validation`
 (`purpose`, or a raw `fidelity: pipeline-validation` key).
@@ -32,7 +36,10 @@ Locked answer to the solver-side question:
 - `dx=1.875 mm` is **Minimum Goal B**: format and plumbing. That is
   exactly this tag.
 
-## Why E-wave / IVPG are not admissible
+## Why *this beat* cannot evaluate E-wave / IVPG
+
+The project still needs those quantities. This series cannot support
+the claim.
 
 - Image cavity is ~105 mL. Warmup ED 87.7 and next 90–92 are still
   short. ESV at EF 33% and V0=58 sits near V0 (~59 mL).
@@ -49,8 +56,8 @@ Locked answer to the solver-side question:
 ## Next
 
 η=0으로 박동 2–3을 닫는다 (~11 h, 이어서 한 박동 더). 그 런도
-`pipeline-validation`이다. 3회째 과학 레버(B4 / V0)는 그 다음이고,
-IVPG는 gate R 이후다.
+`pipeline-validation`이다. 그 다음이 B4(V0/EF, 충만량)이고, E파/IVPG
+평가는 **gate R (`dx=0.94 mm`)** 이후의 그 목표 데이터에서 한다.
 
 Code: `pipeline_validation_fidelity()` in
 `pinnecho.data.ibfe_fidelity`.

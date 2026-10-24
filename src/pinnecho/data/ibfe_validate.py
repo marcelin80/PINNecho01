@@ -46,16 +46,23 @@ def _finite(name: str, t: torch.Tensor, errors: List[str]) -> None:
 def _check_fidelity(frames, warnings: List[str], stats: Dict[str, float]) -> None:
     """Surface Decision 9 /meta/fidelity so diastolic consumers see it now."""
     from .ibfe_fidelity import (
-        DECISION_9_VALUES, DIASTOLE_UNUSABLE_WARNING, REFERENCE_VALUES,
-        SOURCE_VALUES, resolve_fidelity,
+        DECISION_9_VALUES, DIASTOLE_UNUSABLE_WARNING, PIPELINE_VALIDATION_WARNING,
+        PURPOSE_VALUES, REFERENCE_VALUES, SOURCE_VALUES, resolve_fidelity,
     )
 
     fid = resolve_fidelity(frames)
     stats["fidelity_diastole_usable"] = float(fid.diastole_usable)
     stats["fidelity_approximation"] = float(fid.approximation)
+    stats["fidelity_filling_present"] = float(getattr(fid, "filling_present", False))
     if fid.v0_scale is not None:
         stats["fidelity_v0_scale"] = float(fid.v0_scale)
-    if not fid.diastole_usable:
+    purpose = getattr(fid, "purpose", "unspecified")
+    if purpose == "pipeline-validation":
+        warnings.append(
+            f"{PIPELINE_VALIDATION_WARNING} decision_9={fid.decision_9}; "
+            f"usable_phases={list(fid.usable_phases)}."
+        )
+    elif not fid.diastole_usable:
         warnings.append(
             f"{DIASTOLE_UNUSABLE_WARNING} decision_9={fid.decision_9}; "
             f"reference={fid.reference}; usable_phases={list(fid.usable_phases)}."
@@ -66,6 +73,8 @@ def _check_fidelity(frames, warnings: List[str], stats: Dict[str, float]) -> Non
         warnings.append(f"fidelity.decision_9={fid.decision_9!r} is not a known tag")
     if fid.reference not in REFERENCE_VALUES:
         warnings.append(f"fidelity.reference={fid.reference!r} is not a known tag")
+    if purpose not in PURPOSE_VALUES:
+        warnings.append(f"fidelity.purpose={purpose!r} is not a known tag")
     if fid.decision_9 == "approx" and fid.v0_scale is None:
         warnings.append(
             "fidelity.decision_9=approx but v0_scale is missing — V0 is an "

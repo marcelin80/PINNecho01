@@ -18,9 +18,12 @@ from pinnecho.data.ibfe_fidelity import (
     MONK_ALPHA,
     MONK_V0_ML,
     MONK_V_IMG_ML,
+    PIPELINE_VALIDATION_WARNING,
     decision_9_approx_fidelity,
     default_pre_decision_9,
+    e_wave_ivpg_usable,
     fidelity_from_scale_reference,
+    pipeline_validation_fidelity,
     diastole_usable,
     isotropic_linear_scale,
     loads_fidelity,
@@ -105,6 +108,30 @@ def test_approx_fidelity_exposes_v0_and_p_img():
     assert fid.v0_ml == KLOTZ_V0_ML
     assert fid.p_img_mmhg == P_IMG_MMHG_ASSUMED
     assert "approximation" in fid.notes.lower()
+
+
+def test_pipeline_validation_is_not_e_wave_or_ivpg():
+    torch.set_default_dtype(torch.float64)
+    fid = pipeline_validation_fidelity()
+    assert fid.purpose == "pipeline-validation"
+    assert fid.filling_present is True
+    assert fid.diastole_usable is False
+    assert fid.usable_phases == ("systole", "ejection", "filling_pipeline")
+    assert abs(fid.v0_scale - MONK_ALPHA) < 1e-12
+    assert fid.extra["dx_mm"] == 1.875
+    assert fid.extra["ef"] == 0.33
+    parsed = loads_fidelity({"purpose": "pipeline-validation", "fidelity": "pipeline-validation"})
+    assert parsed.purpose == "pipeline-validation"
+    assert parsed.usable_phases == ("systole", "ejection", "filling_pipeline")
+
+    frames = synthetic_ibfe_frames(Config(), n_fluid=40, n_wall=20, n_frames=2)
+    tagged = dataclasses.replace(frames, fidelity=fid)
+    assert diastole_usable(tagged) is False
+    assert e_wave_ivpg_usable(tagged) is False
+    report = validate_ibfe_frames(tagged)
+    assert report.ok
+    assert any(PIPELINE_VALIDATION_WARNING[:40] in w for w in report.warnings)
+    assert not any("diastolic filling is unphysiological" in w for w in report.warnings)
 
 
 def test_synthetic_frames_are_not_pre_d9(tmp_path):

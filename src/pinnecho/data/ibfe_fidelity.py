@@ -53,6 +53,9 @@ REFERENCE_VALUES = frozenset({
     "manufactured",
     "public_volume",
 })
+PURPOSE_VALUES = frozenset({
+    "unspecified", "pipeline-validation", "hypothesis",
+})
 
 Q_CLOSE_RATIONALE = (
     "Valve close uses volumetric flow Q (q_close), not a pressure "
@@ -104,6 +107,24 @@ DIASTOLE_UNUSABLE_WARNING = (
     "V0, or later formal backward displacement) is applied."
 )
 
+PIPELINE_VALIDATION_WARNING = (
+    "fidelity.purpose=pipeline-validation: valve order and fill existence "
+    "may be checked. Do not evaluate E-wave, IVPG, or vortex-ring. "
+    "dx=1.875 mm is Minimum Goal B (plumbing), not gate R (0.94 mm). "
+    "B4 (V0/EF) at this dx does not unlock those claims."
+)
+
+PIPELINE_VALIDATION_NOTE = (
+    "purpose=pipeline-validation. Filling and valve order passed. "
+    "Late-fill stall 111 to 27 mL/s was pericardial dashpot eta=0.05; "
+    "eta=0 restores D2 about 130 mL/s (first gate). First beat is warmup "
+    "(ED 87.7 mL, short diastole); next ED about 90-92 mL. EF 33 percent "
+    "at V0=58 mL. dx=1.875 mm. Enough for pipeline / relationship "
+    "plumbing. Not enough for physiological E-wave / IVPG. Next: close "
+    "beats 2-3 at eta=0. Do not spend the next tens of hours on B4 to "
+    "rescue an E-wave claim at this resolution."
+)
+
 
 def isotropic_linear_scale(v0_ml: float, image_volume_ml: float) -> float:
     """Linear isotropic scale that maps image volume to V0.
@@ -140,6 +161,8 @@ class IBFEFidelity:
     image_volume_ml: Optional[float] = None
     p_img_mmhg: Optional[Tuple[float, ...]] = None
     notes: str = ""
+    purpose: str = "unspecified"
+    filling_present: bool = False
     extra: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -155,6 +178,8 @@ class IBFEFidelity:
             "image_volume_ml": self.image_volume_ml,
             "p_img_mmhg": list(self.p_img_mmhg) if self.p_img_mmhg is not None else None,
             "notes": self.notes,
+            "purpose": self.purpose,
+            "filling_present": bool(self.filling_present),
         }
         for key, value in self.extra.items():
             if key not in out:
@@ -280,6 +305,39 @@ def decision_9_approx_fidelity(
     )
 
 
+def pipeline_validation_fidelity(
+    v0_ml: float = MONK_V0_ML,
+    image_volume_ml: float = MONK_V_IMG_ML,
+    ed_ml: float = 87.7,
+    ef: float = 0.33,
+    dx_mm: float = 1.875,
+) -> IBFEFidelity:
+    """Tag for the dx=1.875 mm series: pipeline only, not E-wave / IVPG."""
+    return IBFEFidelity(
+        source="image_ibfe",
+        decision_9="approx",
+        diastole_usable=False,
+        approximation=True,
+        usable_phases=("systole", "ejection", "filling_pipeline"),
+        reference="isotropic_scale_v0",
+        v0_scale=MONK_ALPHA,
+        v0_ml=float(v0_ml),
+        image_volume_ml=float(image_volume_ml),
+        p_img_mmhg=P_IMG_MMHG_ASSUMED,
+        notes=PIPELINE_VALIDATION_NOTE,
+        purpose="pipeline-validation",
+        filling_present=True,
+        extra={
+            "ed_ml": float(ed_ml),
+            "ef": float(ef),
+            "dx_mm": float(dx_mm),
+            "next_ed_ml": [90.0, 92.0],
+            "d2_ml_s_eta0": 130.0,
+            "eta_peri_artifact": 0.05,
+        },
+    )
+
+
 def decision_9_formal_fidelity(
     p_img_mmhg: Sequence[float] = P_IMG_MMHG_ASSUMED,
     image_volume_ml: float = IMAGE_VOLUME_ML_PAT12,
@@ -306,9 +364,12 @@ def fidelity_from_mapping(raw: Optional[Mapping[str, Any]]) -> IBFEFidelity:
         return default_pre_decision_9()
     source = str(raw.get("source", "image_ibfe"))
     decision_9 = str(raw.get("decision_9", "not_applied"))
+    purpose = str(raw.get("purpose") or raw.get("fidelity") or "unspecified")
     phases = raw.get("usable_phases")
     if phases is None:
-        if raw.get("diastole_usable"):
+        if purpose == "pipeline-validation":
+            phases = ("systole", "ejection", "filling_pipeline")
+        elif raw.get("diastole_usable"):
             phases = ("all",)
         else:
             phases = ("systole", "ejection")
@@ -316,9 +377,13 @@ def fidelity_from_mapping(raw: Optional[Mapping[str, Any]]) -> IBFEFidelity:
     known = {
         "source", "decision_9", "diastole_usable", "approximation",
         "usable_phases", "reference", "v0_scale", "v0_ml",
-        "image_volume_ml", "p_img_mmhg", "notes",
+        "image_volume_ml", "p_img_mmhg", "notes", "purpose",
+        "filling_present", "fidelity",
     }
     extra = {k: v for k, v in raw.items() if k not in known}
+    filling = raw.get("filling_present")
+    if filling is None:
+        filling = purpose == "pipeline-validation"
     return IBFEFidelity(
         source=source,
         decision_9=decision_9,
@@ -331,6 +396,8 @@ def fidelity_from_mapping(raw: Optional[Mapping[str, Any]]) -> IBFEFidelity:
         image_volume_ml=_opt_float(raw.get("image_volume_ml")),
         p_img_mmhg=tuple(float(p) for p in p_img) if p_img is not None else None,
         notes=str(raw.get("notes", "")),
+        purpose=purpose,
+        filling_present=bool(filling),
         extra=extra,
     )
 
@@ -372,6 +439,16 @@ def resolve_fidelity(frames) -> IBFEFidelity:
 
 def diastole_usable(frames) -> bool:
     return bool(resolve_fidelity(frames).diastole_usable)
+
+
+def e_wave_ivpg_usable(frames) -> bool:
+    """True only for a tagged hypothesis beat. Pipeline-validation is never it."""
+    fid = resolve_fidelity(frames)
+    return bool(
+        fid.diastole_usable
+        and fid.purpose == "hypothesis"
+        and fid.decision_9 in ("approx", "formal")
+    )
 
 
 def _opt_float(value: Any) -> Optional[float]:

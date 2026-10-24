@@ -56,13 +56,14 @@ Do not hide 0.82 inside a mesh script.
 
 ## `/meta/fidelity`
 
-| field | pre-D9 image-IBFE (default if missing) | D9 approx | manufactured / public volume |
-|---|---|---|---|
-| `source` | `image_ibfe` | `image_ibfe` | `manufactured` / `public_volume` |
-| `decision_9` | `not_applied` | `approx` | `not_applicable` |
-| `diastole_usable` | **false** | true (approximation) | true |
-| `usable_phases` | `systole`, `ejection` | + `diastole` | `all` |
-| `reference` | `image_as_unstressed` | `isotropic_scale_v0` | source name |
+| field | pre-D9 image-IBFE (default if missing) | D9 approx | pipeline-validation | manufactured / public volume |
+|---|---|---|---|---|
+| `source` | `image_ibfe` | `image_ibfe` | `image_ibfe` | `manufactured` / `public_volume` |
+| `decision_9` | `not_applied` | `approx` | `approx` | `not_applicable` |
+| `purpose` | `unspecified` | `unspecified` | **`pipeline-validation`** | `unspecified` |
+| `diastole_usable` | **false** | true (approximation) | **false** (fill may exist) | true |
+| `usable_phases` | `systole`, `ejection` | + `diastole` | + `filling_pipeline` | `all` |
+| `reference` | `image_as_unstressed` | `isotropic_scale_v0` | `isotropic_scale_v0` | source name |
 
 A missing `_fidelity` key is treated as pre-Decision-9. The validator
 then warns: diastolic filling is unphysiological; do not test E-wave /
@@ -71,6 +72,10 @@ IVPG / vortex-ring hypotheses.
 **Tell PINNecho consumers now:** beat data from before Decision 9 is
 implemented is usable for **systole and ejection only**. The
 diastolic filling segment is not physiological.
+
+The 2026-10-24 dx=1.875 mm series is **`purpose=pipeline-validation`**:
+valve order and fill existence only. Not E-wave / IVPG. See
+[`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md).
 
 ## Attempt 2 (allowed; will not fix fill)
 

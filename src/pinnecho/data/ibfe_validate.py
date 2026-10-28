@@ -80,6 +80,21 @@ def _check_fidelity(frames, warnings: List[str], stats: Dict[str, float]) -> Non
             "fidelity.decision_9=approx but v0_scale is missing — V0 is an "
             "exposed assumed parameter because it sets the fill volume"
         )
+    extra = getattr(fid, "extra", {}) or {}
+    eulerian = extra.get("eulerian_present")
+    n_fluid = int(getattr(frames, "coords_fluid").shape[0]) if hasattr(frames, "coords_fluid") else 0
+    if eulerian is False or (purpose == "pipeline-validation" and n_fluid == 0):
+        warnings.append(
+            "eulerian_present=0: no fluid velocity dump. Do not run oracle "
+            "A/B on true IBFE f. That test was not done (Ablation 7: band "
+            "oracle hurt pressure)."
+        )
+    if extra.get("events_points_at") == "beat1_first_transition":
+        warnings.append(
+            "/events currently points at beat 1's first transition. Do not "
+            "use it as the beat-2/beat-3 window. File re-tag is forbidden. "
+            "Read t_adopt_start_s / t_adopt_end_s from the export README."
+        )
 
 
 def validate_ibfe_frames(frames, strict: bool = False,

@@ -53,11 +53,17 @@ the claim.
   after the pipeline is closed, not instead of closing it, and not
   to rescue a physiological claim on Minimum Goal B.
 
-## Next
+## Close (2026-10-28)
 
-η=0으로 박동 2–3을 닫는다 (~11 h, 이어서 한 박동 더). 그 런도
-`pipeline-validation`이다. 그 다음이 B4(V0/EF, 충만량)이고, E파/IVPG
-평가는 **gate R (`dx=0.94 mm`)** 이후의 그 목표 데이터에서 한다.
+Eulerian dump / oracle A/B on true IBFE `f`: **not done** (no same-day
+converter; Ablation 7 already hurt pressure). Full limits:
+[`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
+
+ED3, chatter, and the adoptable `/events` window are **not** facts
+until the MV-close script reports. Do not retag the file.
+
+E-wave / IVPG evaluation stays the PINNecho goal and stays off this
+series (gate R, `dx = 0.94 mm`).
 
 Code: `pipeline_validation_fidelity()` in
 `pinnecho.data.ibfe_fidelity`.

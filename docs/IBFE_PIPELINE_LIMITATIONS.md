@@ -131,7 +131,8 @@ resolution for pressure gradients.
 **PINNecho (this document):**
 
 - Branch: `cursor/ibfe-close-limitations-935e`
-- Commit: filled after the introducing commit lands (do not invent)
+- Commit: `7c92ea2fa6dc396d4a908618f45fbea2be6bb407` (introducing this file;
+  later hash-fill commits stay on the same branch)
 - Environment: Python ≥ 3.10, CPU PyTorch, `pip install -e ".[dev]"`
 - Command: `pytest tests/test_ibfe_fidelity.py -q`
 - Code: `pipeline_validation_fidelity()` in

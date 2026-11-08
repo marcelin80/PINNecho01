@@ -224,6 +224,32 @@ true `f`.
   unstressed reference. Diastolic filling is unphysiological; those
   beats are systole/ejection only. Do not use them to claim an E-wave,
   IVPG, or vortex-ring result. [`DECISION_9.md`](DECISION_9.md).
+- The IBFE `pipeline-validation` series is wall-only
+  (`eulerian_present = 0`). Oracle A/B on true IBFE `f` was **not**
+  done. Ablation 7 (band-localized oracle) already hurt pressure.
+  [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
+
+## 6b. Paper strength (locked, 2026-10-28)
+
+Observability is not new (triplane iVFM). Persist Dice ~0.96 follows
+from persist occupying ~84% of the cavity — do not lead with it as
+the metric-failure exhibit. Jet under-estimate overlaps PINN spectral
+bias (Rahaman et al., ICML 2019; Wang, Yu and Perdikaris, *J. Comput.
+Phys.* 2022; Wang, Wang and Perdikaris, *CMAME* 2021). That is an
+overlap with a known smoothing prior, not a newly discovered PINN
+law. Fourier features (Tancik et al., 2020) are **off by default**
+here because they corrupt derivatives; they were not ablated on the
+Corrado jet. Data: one rigid phantom, three seeds, one method.
+
+Defensible contribution: quantify global-metric vs downstream-task
+mismatch and propose a protocol. Needs the same direction on a
+classical baseline and DUPLEX, ≥ 5 seeds. Journal passage after
+review is unlikely (probability unknown). Surest product: preprint
+plus public code and evaluation tools.
+
+**Stop before seeing millilitres:** 4–6 week cap. If jet loss does
+not reproduce on a classical baseline or DUPLEX, cut to a technical
+note. Do not train DUPLEX. Do not rerun Corrado A/B/C.
 
 ## 7. What this paper is not
 
@@ -249,3 +275,14 @@ A licence to start a thrombus solver.
 - Assi et al. / Garcia iVFM papers (lineage, not same-data scores).
 - Arshad et al., *Magn Reson Med* 2024; Zenodo 12515230 (mentioned
   as inquiry-only, not used).
+- Rahaman et al., *On the Spectral Bias of Neural Networks*, ICML
+  2019, PMLR 97:5301–5310.
+- Wang, Yu and Perdikaris, *When and why PINNs fail to train: A
+  neural tangent kernel perspective*, *J. Comput. Phys.* 449:110768
+  (2022).
+- Wang, Wang and Perdikaris, *On the eigenvector bias of Fourier
+  feature networks*, *Comput. Methods Appl. Mech. Eng.* 384:113938
+  (2021).
+- Tancik et al., *Fourier Features Let Networks Learn High Frequency
+  Functions in Low Dimensional Domains*, NeurIPS 2020 (available here;
+  off by default).

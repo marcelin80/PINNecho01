@@ -120,6 +120,12 @@ def test_pipeline_validation_is_not_e_wave_or_ivpg():
     assert abs(fid.v0_scale - MONK_ALPHA) < 1e-12
     assert fid.extra["dx_mm"] == 1.875
     assert fid.extra["ef"] == 0.33
+    assert fid.extra["eulerian_present"] is False
+    assert fid.extra["oracle_ab_on_true_f"] == "not_done"
+    assert fid.extra["ed3_locked"] is False
+    assert fid.extra["events_points_at"] == "beat1_first_transition"
+    assert fid.extra["file_retag_forbidden"] is True
+    assert "oracle A/B on true IBFE f" in fid.notes or "not done" in fid.notes
     parsed = loads_fidelity({"purpose": "pipeline-validation", "fidelity": "pipeline-validation"})
     assert parsed.purpose == "pipeline-validation"
     assert parsed.usable_phases == ("systole", "ejection", "filling_pipeline")
@@ -132,6 +138,9 @@ def test_pipeline_validation_is_not_e_wave_or_ivpg():
     assert report.ok
     assert any(PIPELINE_VALIDATION_WARNING[:40] in w for w in report.warnings)
     assert not any("diastolic filling is unphysiological" in w for w in report.warnings)
+    assert any("oracle A/B on true IBFE f" in w for w in report.warnings)
+    assert any("beat 1's first transition" in w for w in report.warnings)
+    assert any("File re-tag is forbidden" in w for w in report.warnings)
 
 
 def test_synthetic_frames_are_not_pre_d9(tmp_path):

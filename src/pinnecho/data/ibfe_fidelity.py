@@ -119,10 +119,12 @@ PIPELINE_VALIDATION_NOTE = (
     "Late-fill stall 111 to 27 mL/s was pericardial dashpot eta=0.05; "
     "eta=0 restores D2 about 130 mL/s (first gate). First beat is warmup "
     "(ED 87.7 mL, short diastole); next ED about 90-92 mL. EF 33 percent "
-    "at V0=58 mL. dx=1.875 mm. Enough for pipeline plumbing. "
-    "E-wave / IVPG remain the PINNecho goal; this beat cannot evaluate "
-    "them. Next: close beats 2-3 at eta=0. B4 at this dx does not unlock "
-    "those claims."
+    "at V0=58 mL is the warmup beat, not a locked ED3. Closer model-state "
+    "EF about 40 percent is also not locked to ED3. dx=1.875 mm. "
+    "Eulerian dump / oracle A/B on true IBFE f: not done. "
+    "E-wave / IVPG remain the PINNecho goal; this series cannot evaluate "
+    "them. Closed 2026-10-28: docs/IBFE_PIPELINE_LIMITATIONS.md. "
+    "B4 at this dx does not unlock those claims."
 )
 
 
@@ -334,6 +336,11 @@ def pipeline_validation_fidelity(
             "next_ed_ml": [90.0, 92.0],
             "d2_ml_s_eta0": 130.0,
             "eta_peri_artifact": 0.05,
+            "eulerian_present": False,
+            "oracle_ab_on_true_f": "not_done",
+            "ed3_locked": False,
+            "events_points_at": "beat1_first_transition",
+            "file_retag_forbidden": True,
         },
     )
 

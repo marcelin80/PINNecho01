@@ -549,6 +549,24 @@ for a larger-budget / richer-acquisition run.
 
 ### Preparing real IBAMR/IBFE data
 
+> **Consumer warning — `pipeline-validation` wall export (2026-10-28).**
+> Use: **`pipeline-validation` only.** Do **not** evaluate an E-wave, IVPG,
+> vortex ring, or any physiological interpretation of diastole on this series.
+> `/events` currently points at **beat 1's first transition**. Do not use it as
+> the beat-2 / beat-3 window. **File re-tag is forbidden** — do not rewrite
+> `_fidelity` or `/events` on a released bundle. Adoptable time window, seconds
+> (copy from the solver README when the MV-close script reports; do not invent):
+>
+> ```
+> t_adopt_start_s:  <not filled>
+> t_adopt_end_s:    <not filled>
+> ```
+>
+> Not in this export: Eulerian velocity (`eulerian_present = 0`),
+> `traction_wall`, per-beat valve-transition counts. Oracle A/B on true IBFE
+> `f` was **not** done. Full limits:
+> [`docs/IBFE_PIPELINE_LIMITATIONS.md`](docs/IBFE_PIPELINE_LIMITATIONS.md).
+
 The remaining items are all *data-gated* — they need a real IBFE export. The
 ingestion pipeline for that data is now built and tested, so plugging in real
 data requires **no code changes**, only matching the on-disk contract. See the

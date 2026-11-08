@@ -1,6 +1,6 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-24 · 브랜치 `cursor/pipeline-validation-935e` · E파/IVPG는 목표. 지금 박동은 파이프라인만. 다음은 η=0 박동 2–3.
+> 2026-10-28 · 브랜치 `cursor/ibfe-close-limitations-935e` · IBFE 시리즈는 pipeline-validation으로 닫힘. 속도장 덤프/오라클 A/B 안 함. ED3는 MV-close 후 붙임.
 > 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
@@ -39,8 +39,8 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | DUPLEX (CREATIS 합성 듀플렉스) | **PINN GT 불가** | 무학습 점검 닫힘. 공개 `.mat`에 `(u,w)` 없음. 투영/발산 계산 불가. [`DUPLEX.md`](data/DUPLEX.md). |
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
 | 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
-| 실 IBAMR/IBFE 한 주기 | **솔버 export 대기** | gate R `dx = 0.94 mm`. 코라도 제트를 고치지 않음. |
-| 결정 9 무응력 기준 | **파이프라인만 잠금** | E파/IVPG는 목표. 지금 박동은 그 평가용이 아님. ED 87.7 예열, dx=1.875. 다음: η=0 박동 2–3. [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md). |
+| 실 IBAMR/IBFE 한 주기 | **pipeline-validation 닫힘; gate R 대기** | dx=1.875 시리즈는 벽만. gate R `dx = 0.94 mm`는 미시험. 코라도 제트를 고치지 않음. |
+| 결정 9 무응력 기준 | **한계 문서로 닫힘** | `pipeline-validation`만. 속도장 없음, 오라클 A/B 안 함(Ablation 7). ED3·chatter·`/events` 창은 미확정. [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md). |
 
 ---
 
@@ -147,8 +147,8 @@ PINNecho의 핵심 관심사(E파, IVPG, vortex ring)는 심실이 실제로 수
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **η=0으로 박동 2–3을 닫는다 (~11 h).** `/meta/fidelity=pipeline-validation`. E파/IVPG로 읽지 말 것. B4(V0/EF)는 그 다음이고, 이 dx에서 생리 주장을 살리지 않는다. [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md).
-2. **논문 초안을 접촉 없이 쓴다.** [`PAPER.md`](PAPER.md). Charité / Delft / OSU 마스크 / 협업 문의는 필수 경로에서 뺀다.
+1. **IBFE 시리즈는 한계 문서로 닫는다.** 오라클 A/B는 하지 않음. MV-close의 ED3·chatter·`t_adopt_*`가 오면 한계 문서 표에만 붙인다. 파일 재태그 금지. [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
+2. **논문은 프리프린트+코드가 상한.** 4–6주 기한. 고전 기준선/DUPLEX에서 제트 손실이 안 나오면 기술 노트. [`PAPER.md`](PAPER.md) §6b.
 3. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
 4. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
 5. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
@@ -213,4 +213,5 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`PAPER.md`](PAPER.md) | 접촉 없는 논문 초안 |
 | [`DECISION_9.md`](DECISION_9.md) | 무응력 기준 (a) 잠금. `/meta/fidelity`. 결정 9 이전 박동은 수축·박출만. |
 | [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md) | 등방 스케일 절차. 솔버 충만 5·10 mmHg. |
-| [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md) | 2026-10-24 판정: 파이프라인만. E파/IVPG 불가. |
+| [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md) | E파/IVPG는 목표. 지금 박동은 파이프라인만. |
+| [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md) | 닫기 한계. 오라클 A/B 안 함. ED3 미확정. 재태그 금지. |

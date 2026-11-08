@@ -74,8 +74,10 @@ implemented is usable for **systole and ejection only**. The
 diastolic filling segment is not physiological.
 
 The 2026-10-24 dx=1.875 mm series is **`purpose=pipeline-validation`**:
-valve order and fill existence only. Not E-wave / IVPG. See
-[`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md).
+valve order and fill existence only. Not E-wave / IVPG. Closed
+2026-10-28: no Eulerian dump, no oracle A/B on true IBFE `f`. See
+[`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md) and
+[`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
 
 ## Attempt 2 (allowed; will not fix fill)
 
@@ -104,9 +106,15 @@ switch cannot fire. Close is therefore keyed on volumetric flow `Q`
 pressure criterion. It belongs in the export notes (`Q_CLOSE_RATIONALE`
 in `ibfe_fidelity.py`).
 
-## Next process (approximate V0)
+## Approximate V0 (applied on monk; series closed)
 
-PINNecho now scales a **reference** mesh and writes the exposed
+Monk already wrote `~/pat12_meshes/LV_V0.e` (α = 0.819292). Do not
+re-scale `LV.e` with PINNecho. The dx=1.875 mm series is closed as
+`pipeline-validation`
+([`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md)).
+The scaler remains for a later mesh, not for this export:
+
+PINNecho scales a **reference** mesh and writes the exposed
 assumptions. The laptop solver then fills at 5 mmHg and 10 mmHg.
 
 See [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md).

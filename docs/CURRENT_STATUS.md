@@ -1,10 +1,10 @@
 # PINNecho 현재 진행 상황
 
-> 2026-10-28 · 브랜치 `cursor/ibfe-close-limitations-935e` · IBFE 시리즈는 pipeline-validation으로 닫힘. 속도장 덤프/오라클 A/B 안 함. ED3는 MV-close 후 붙임.
-> 상세 숫자: [`docs/results/public_volume/`](results/public_volume/)
+> 2026-11-09 · 브랜치 `cursor/task-mismatch-wall-935e` · 벽은 GPU/데이터가 아니라 **과제 설정**. 15 cm/s 3D mL vs 레퍼런스의 2D 유선. IBFE는 pipeline-validation으로 닫힘.
+> 상세 숫자: [`docs/results/public_volume/`](results/public_volume/) · 진단: [`TASK_MISMATCH.md`](TASK_MISMATCH.md)
 > Stage 1 백본·어블레이션 사전: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
 
-한 줄: **도플러에서 3D 속도를 재구성하는 방법은 돌아가고, 관측성(창 수)은 실측 LV 볼륨에서도 확인됐다. 그 필드 위에 CHF 혈전 생성 솔버를 지금 얹으면 안 된다.**
+한 줄: **레퍼런스는 큰 스케일 2D 유선을 물었고, 여기는 작은 고속 코어의 3D millilitre를 물었다. GPU를 덜 써서 10 cm/s가 흉해 보였을 뿐이고, 진짜 벽은 그 과제다.**
 
 ---
 
@@ -28,7 +28,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | Corrado LV 팬텀 변환 | 닫힘 | Day 1 PC VIPR 30 min → NPZ. 다시 변환하지 말 것. |
 | 창 1/2/3 관측성 (2000 step, 3 seed) | 닫힘 | `u` 1→2, `v` 1→3. speed 0.51 → 0.42. |
 | Eulerian 정체 GT (10 cm/s) | 닫힘 | 195 mL 공동, persist 165 mL, **제트 30.4 mL**. |
-| PINN vs GT 정체 (3-window, 3 seed) | **A 기록** | 10 cm/s 제트 24.2–26.2 mL. 15 cm/s Dice ~0.56. |
+| PINN vs GT 정체 (3-window, 3 seed) | **A 기록 (2k)** | 10 cm/s 24.2–26.2 mL. 15 cm/s Dice ~0.56. 20k 보고: 10 cm/s≈0%, 15 cm/s 여전히 −21~−23%. |
 | 1창 3시드 (C) | **기록** | 10 cm/s 23.4–24.0 mL. 창 효과는 작다. 15 cm/s는 실패. |
 | MRI vs 정합 PIV | 닫힘 | PIV FOV 73 mL는 정체 바다. **30 mL 제트는 밖.** |
 | 에코 슬랩 vs 제트 (학습 없음) | 닫힘 | A4C 73%, 다만 공동도 62%(두꺼운 슬랩). |
@@ -38,7 +38,7 @@ CHF 혈전 아이디어는 그 다음 층이다: 재구성한 3D 속도 → 정�
 | OSU rest 4D-flow (#11) | **팩 PENDING, 게이트 1 개정** | (20,77,96,72). 폐기: LV p99≥10 cm/s (잡음만으로 통과). 대체: 조직 3× time-RMS, 푸리에 1–4 ≥0.55, Aao±40%, 승모/대동맥 SV 균형, jet_chamber. 자동박스 43:60 59:69 15:37은 LV 아님. |
 | DUPLEX (CREATIS 합성 듀플렉스) | **PINN GT 불가** | 무학습 점검 닫힘. 공개 `.mat`에 `(u,w)` 없음. 투영/발산 계산 불가. [`DUPLEX.md`](data/DUPLEX.md). |
 | 열화 대비책 (Corrado+합성기) | **기준만 잠금, 미실행** | 우리 모델이라고 명시. 임상 Nyquist 1.078는 p99 0.261이라 비활성 가능. [`DEGRADE_CORRADO.md`](results/public_volume/DEGRADE_CORRADO.md). |
-| 논문 초안 | **접촉 없는 구조** | 지표 결함 + 순환 + (선택) 우리 열화. 환자 정확도/FSI 효과 금지. [`PAPER.md`](PAPER.md). |
+| 논문 초안 | **과제 불일치가 벽** | 2D VFM 유선 vs 15 cm/s 3D mL. 10 cm/s/relL2는 스텝. 코어는 저역 통과. [`PAPER.md`](PAPER.md) [`TASK_MISMATCH.md`](TASK_MISMATCH.md). |
 | 실 IBAMR/IBFE 한 주기 | **pipeline-validation 닫힘; gate R 대기** | dx=1.875 시리즈는 벽만. gate R `dx = 0.94 mm`는 미시험. 코라도 제트를 고치지 않음. |
 | 결정 9 무응력 기준 | **한계 문서로 닫힘** | `pipeline-validation`만. 속도장 없음, 오라클 A/B 안 함(Ablation 7). ED3·chatter·`/events` 창은 미확정. [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md). |
 
@@ -106,13 +106,15 @@ B (`|v_beam|` 프레임별 p80, [`STASIS_RECON_FASTFRAC.md`](results/public_volu
 
 ## 4. 논문 프레임 (정직하게)
 
-관측성만으로는 새롭지 않다. triplane iVFM이 이미 다중 평면으로 3성분을 복원하고, 단일 빔이 한 성분만 보는 것은 기하다. 이 프로젝트가 방어하기 쉬운 중심은:
+관측성만으로는 새롭지 않다. triplane iVFM이 이미 다중 평면으로 3성분을 복원하고, 단일 빔이 한 성분만 보는 것은 기하다.
 
-- relL2와 persist Dice가 **임상적으로 중요한 제트 손실을 가린다**
-- 재구성은 **하류 과제(정체, 나중의 혈전) 기준**으로 평가해야 한다
-- 제조해·오라클 `f`를 입력으로 쓸 때의 **순환 목록**
+**근본 원인은 데이터도 GPU도 아니다.** 레퍼런스(AI-VFM, iVFM-PINN, CSF-PINN, triplane iVFM)는 2D/삼평면 유선·RMSE·가끔 WSS다. 여기는 4D-flow GT에 대해 15 cm/s 제트 부피(10.8 mL, 2 mm에서 ~1350복셀)를 물었다. PINN+NS가 잘하는 쪽이 아니다.
 
-관측성은 그 안의 한 결과로 넣는다. “창을 늘리면 좋아진다”를 제목으로 두지 않는다.
+질문 순서: (1) FSI `f` → 기각(순환). (2) 창으로 3D 복원 → 관측성, 이미 있음. (3) 15 cm/s 코어 → 벽.
+
+보고된 20k가 벽을 나눈다. 10 cm/s와 relL2는 2k의 −14~−20%/0.42에서 ≈0%/0.08. 「학습을 덜 했다」는 여기까지만. 15 cm/s는 20k×2시드에도 −21~−23%, Fourier-1은 −70%. 블러 GT Dice 0.760이면 1복셀만 문질러도 이 집합은 깨진다. Corrado는 환자 에코보다 쉬운 편이고, GT가 있는 상태에서도 코어를 못 맞췄다.
+
+제목으로 두지 말 것: “창을 늘리면 좋아진다”, persist Dice 0.96, 회복된 10 cm/s.
 
 ## 4b. 혈전 / CHF 연동에 대한 현재 답
 
@@ -147,13 +149,14 @@ PINNecho의 핵심 관심사(E파, IVPG, vortex ring)는 심실이 실제로 수
 
 ## 5. 지금 열린 일 (우선순위)
 
-1. **IBFE 시리즈는 한계 문서로 닫는다.** 오라클 A/B는 하지 않음. MV-close의 ED3·chatter·`t_adopt_*`가 오면 한계 문서 표에만 붙인다. 파일 재태그 금지. [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
-2. **논문은 프리프린트+코드가 상한.** 4–6주 기한. 고전 기준선/DUPLEX에서 제트 손실이 안 나오면 기술 노트. [`PAPER.md`](PAPER.md) §6b.
-3. **Corrado A/B/C/블러는 동결.** 피크비 ~0.83은 기록된 B 표. 재실행하지 말 것.
-4. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
-5. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
-6. **MIMIC은 선택.** 정답 없음, credentialing에 reference 필요.
-7. **혈전 솔버는 아직 아님.**
+1. **벽은 과제 설정.** 15 cm/s 3D mL. 10 cm/s/relL2는 스텝으로 설명. 환자/IBFE를 넣어도 이 벽은 낮아지지 않는다. [`TASK_MISMATCH.md`](TASK_MISMATCH.md).
+2. **논문은 프리프린트+코드가 상한.** 4–6주. 고전 기준선/DUPLEX가 이 15 cm/s 컷을 묻지 않거나 같은 방향이 아니면 기술 노트. [`PAPER.md`](PAPER.md) §6b.
+3. **IBFE 시리즈는 한계 문서로 닫힘.** MV-close의 ED3·chatter·`t_adopt_*`가 오면 표에만 붙인다. 파일 재태그 금지. [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
+4. **Corrado A/B/C/블러는 동결.** 2k 표와 B 피크비 ~0.83. 재실행하지 말 것. 20k는 보고값(JSON 없음).
+5. **DUPLEX로 학습하지 말 것.** 공개본은 벡터 GT가 없다. iVFM 논문 숫자와 같은 데이터인지는 미확인 → 같은 표에 넣지 말 것.
+6. **열화 문단이 필요할 때만** Corrado+우리 합성기. `ideal` 먼저, 하락폭만. `alias_clinical` wrap < 0.01이면 행을 뺀다.
+7. **MIMIC은 선택.** 정답 없음, credentialing에 reference 필요.
+8. **혈전 솔버는 아직 아님.** 코어가 새는 이유이기도 전에, 과제가 레퍼런스와 다르다.
 
 Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 기록만. OSU는 [`OSU_ZENODO.md`](data/OSU_ZENODO.md).
 
@@ -183,7 +186,7 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 - `fsi_informed` on 공개 볼륨
 - 이 필드 위 Lagrangian / 혈전 솔버
 
-노트북 JSON은 `docs/results/public_volume/`에 그대로 둔다.
+노트북 JSON은 `docs/results/public_volume/`에 그대로 둔다. 20k는 보고값이다. 2k JSON을 다시 돌려 맞추지 말 것.
 
 ---
 
@@ -215,3 +218,4 @@ Corrado 명령은 [`JET_PRESERVE.md`](results/public_volume/JET_PRESERVE.md)에 
 | [`DECISION_9_APPROX.md`](DECISION_9_APPROX.md) | 등방 스케일 절차. 솔버 충만 5·10 mmHg. |
 | [`PIPELINE_VALIDATION.md`](PIPELINE_VALIDATION.md) | E파/IVPG는 목표. 지금 박동은 파이프라인만. |
 | [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md) | 닫기 한계. 오라클 A/B 안 함. ED3 미확정. 재태그 금지. |
+| [`TASK_MISMATCH.md`](TASK_MISMATCH.md) | 벽은 과제: 2D 유선 vs 15 cm/s 3D mL. 20k는 보고값. |

@@ -170,6 +170,9 @@ Peak ratio (B, GT jet, same `peak_speed_report`):
 
 **~0.83.** Do not rerun to reproduce this table.
 
+These 2k 10 cm/s millilitres are **not** the wall. Reported 20k
+(§4.7) brings that band to ≈ 0 %. The 15 cm/s core does not follow.
+
 ### 4.4 Blur-GT ceiling (no train)
 
 σ = 1 voxel on GT velocity:
@@ -196,15 +199,45 @@ No PINN number. Public dump cannot score a vector recon.
 Fallback ladder is locked and **not run**. If the paragraph is
 needed, run `ideal` first.
 
+## 4.7 Resource split (reported 2026-11-09; JSON not in this repo)
+
+Do not rerun frozen A/B/C. Reported 20k Adam, 2 seeds, same Corrado
+GT:
+
+- 10 cm/s signed jet error and speed relL2 go from −14…−20 % /
+  ~0.42 at 2k to **≈ 0 % / ~0.08** at 20k. Under-training explains
+  **this band only**.
+- 15 cm/s core stays **−21…−23 %** (peaks 0.921 and 0.947).
+  Reported Fourier-1 is **−70 %** on that core.
+
+The 15 cm/s GT remainder is 10.8 mL ≈ **1350 voxels** at 2 mm.
+Blur-GT Dice 0.760 already shows one voxel of smear breaks the set.
+See [`TASK_MISMATCH.md`](TASK_MISMATCH.md).
+
 ## 5. Discussion
 
-The result that survives contact-free resources is evaluative:
-**relL2 and persist Dice hide a systematic jet under-estimate on a
-measured cavity.** Sampling and extra windows do not restore the
-15 cm/s core. A blur ceiling shows the PINN is worse than
-one-voxel smoothness on location.
+**The wall is the question, not GPU or data.**
 
-Observability is real and unsurprising. It is a subsection.
+References (AI-VFM, iVFM-PINN, CSF-PINN, triplane iVFM) are 2-D or
+triplane colour-Doppler VFM: streamlines, velocity RMSE, sometimes
+WSS. CSF-PINN already called gradients/WSS weak. They do not ask
+to match a 15 cm/s jet volume to 4D-flow GT.
+
+This project’s questions, in order:
+
+1. FSI `f` for pressure/gradients — **rejected** (circularity).
+   The intended difference from the references died first.
+2. Sparse one-component windows restoring a 3-D volume — true, and
+   already triplane-iVFM observability. Not a title.
+3. **15 cm/s core millilitres** — the wall. PINN+NS is a low-pass;
+   the tail cut goes first. Extra steps fix 10 cm/s and relL2, not
+   this core. Harder data will not lower it: Corrado is already
+   easier than patient echo, and the core failed **with** 4D-flow GT.
+
+The evaluative remainder is still true, but narrower than “jet loss
+at 10 cm/s”: **relL2 and the 10 cm/s remainder are compute-sensitive;
+the 15 cm/s millilitre question is not, and the references never
+asked it.** Do not lead with persist Dice ~0.96.
 
 FSI is closed in the opposite direction: manufactured `f` is
 circular; deliverable `fsi_param` does not beat baseline without
@@ -229,32 +262,38 @@ true `f`.
   done. Ablation 7 (band-localized oracle) already hurt pressure.
   [`IBFE_PIPELINE_LIMITATIONS.md`](IBFE_PIPELINE_LIMITATIONS.md).
 
-## 6b. Paper strength (locked, 2026-10-28)
+## 6b. Paper strength (locked, 2026-10-28; task-mismatch 2026-11-09)
 
 Observability is not new (triplane iVFM). Persist Dice ~0.96 follows
 from persist occupying ~84% of the cavity — do not lead with it as
-the metric-failure exhibit. Jet under-estimate overlaps PINN spectral
-bias (Rahaman et al., ICML 2019; Wang, Yu and Perdikaris, *J. Comput.
-Phys.* 2022; Wang, Wang and Perdikaris, *CMAME* 2021). That is an
-overlap with a known smoothing prior, not a newly discovered PINN
-law. Fourier features (Tancik et al., 2020) are **off by default**
-here because they corrupt derivatives; they were not ablated on the
-Corrado jet. Data: one rigid phantom, three seeds, one method.
+the metric-failure exhibit. The 2k 10 cm/s leak is **not** the wall:
+reported 20k brings that band to ≈ 0 % / relL2 ~0.08. The wall is
+**15 cm/s millilitres of a ~1350-voxel core**, which the references
+never asked. That tail-cut overlaps PINN spectral bias / low-pass
+(Rahaman et al., ICML 2019; Wang, Yu and Perdikaris, *J. Comput.
+Phys.* 2022; Wang, Wang and Perdikaris, *CMAME* 2021). It is not a
+newly discovered PINN law. Reported Fourier-1 is **−70 %** on the
+core — do not turn RFF on as a rescue. Data: one rigid phantom;
+2k tables are 3 seeds; 20k is 2 seeds, JSON not here.
 
-Defensible contribution: quantify global-metric vs downstream-task
-mismatch and propose a protocol. Needs the same direction on a
-classical baseline and DUPLEX, ≥ 5 seeds. Journal passage after
-review is unlikely (probability unknown). Surest product: preprint
-plus public code and evaluation tools.
+Defensible contribution is narrower still: **show that global
+metrics and 10 cm/s recover with steps, while a 15 cm/s millilitre
+cut does not, and that this is a different question from 2-D VFM.**
+A protocol paper still needs the same direction on a classical
+baseline and DUPLEX, ≥ 5 seeds. Journal passage after review is
+unlikely (probability unknown). Surest product: preprint plus
+public code and evaluation tools.
 
-**Stop before seeing millilitres:** 4–6 week cap. If jet loss does
-not reproduce on a classical baseline or DUPLEX, cut to a technical
-note. Do not train DUPLEX. Do not rerun Corrado A/B/C.
+**Stop before seeing millilitres:** 4–6 week cap. If the 15 cm/s
+core loss is **not** the story on a classical baseline or DUPLEX
+(or if those methods are not even asked this cut), cut to a
+technical note. Do not train DUPLEX. Do not rerun Corrado A/B/C.
 
 ## 7. What this paper is not
 
 A reconstruction challenge win. An FSI paper. A clinical validation.
-A licence to start a thrombus solver.
+A GPU-budget paper (20k fixes 10 cm/s and relL2; not the 15 cm/s
+core). A licence to start a thrombus solver.
 
 ## 8. Next (optional, not essential)
 

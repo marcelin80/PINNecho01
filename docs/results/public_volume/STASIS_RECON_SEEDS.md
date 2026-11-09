@@ -53,3 +53,8 @@ The 1-window 3-seed pair is
 this table 24.2–26.2 mL. B is
 [`STASIS_RECON_FASTFRAC.md`](STASIS_RECON_FASTFRAC.md) (rejected).
 Do not rerun A, B, or C.
+
+Reported 20k (2026-11-09, JSON not here) closes the **10 cm/s** leak
+and relL2; it does not close the **15 cm/s** core. That split is
+[`TASK_MISMATCH.md`](../../TASK_MISMATCH.md). Do not rerun this 2k
+table to match 20k.
